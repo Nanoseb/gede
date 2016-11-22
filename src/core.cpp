@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2016 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include <assert.h>
 #include <signal.h>
+#include <stdlib.h> // posix_openpt()
+#include <fcntl.h> //  O_RDWR
 
 
 
@@ -107,7 +109,7 @@ Core::Core()
     Com& com = Com::getInstance();
     com.setListener(this);
 
-    m_ptsFd = getpt();
+    m_ptsFd = posix_openpt(O_RDWR | O_NOCTTY);
    
     if(grantpt(m_ptsFd))
         errorMsg("Failed to grantpt");
@@ -128,6 +130,13 @@ Core::~Core()
     com.setListener(NULL);
 
     close(m_ptsFd);
+
+    for(int m = 0;m < m_sourceFiles.size();m++)
+    {
+        SourceFile *sourceFile = m_sourceFiles[m];
+        delete sourceFile;
+    }
+
 }
 
 
@@ -230,25 +239,20 @@ int Core::initRemote(Settings *cfg, QString gdbPath, QString programPath, QStrin
 
     }
 
-    if (!cfg->m_attachMode) {
-        if(!programPath.isEmpty())
-        {
-            com.commandF(&resultData, "-file-exec-file %s", stringToCStr(programPath));
+    if(!programPath.isEmpty())
+    {
+      com.commandF(&resultData, "-file-exec-file %s", stringToCStr(programPath));
 
+        if(cfg->m_download)
             com.commandF(&resultData, "-target-download");
-        }
-
     }
+    
 
     gdbSetBreakpointAtFunc(cfg->m_initialBreakpoint);
-
+    
     gdbGetFiles();
 
-    if (cfg->m_attachMode) {
-        gdbContinue();
-    } else {
-        gdbRun();
-    }
+    gdbRun();
 
     return 0;
 }
@@ -258,6 +262,7 @@ void Core::onGdbOutput(int socketFd)
 {
     Q_UNUSED(socketFd);
     char buff[128];
+    buff[0] = '\0';
     int n =  read(m_ptsFd, buff, sizeof(buff)-1);
     if(n > 0)
     {
@@ -269,6 +274,7 @@ void Core::onGdbOutput(int socketFd)
 
 /**
  * @brief Reads a memory area.
+ * @return 0 on success.
  */
 int Core::gdbGetMemory(uint64_t addr, size_t count, QByteArray *data)
 {
@@ -385,6 +391,9 @@ bool Core::gdbGetFiles()
 }
 
 
+/**
+ * @brief Sets a breakpoint at a function
+ */
 int Core::gdbSetBreakpointAtFunc(QString func)
 {
     Com& com = Com::getInstance();
@@ -401,12 +410,17 @@ int Core::gdbSetBreakpointAtFunc(QString func)
     return rc;
 }
 
+
+/**
+ * @brief Asks gdb to run the program.
+ */
 void Core::gdbRun()
 {
     Com& com = Com::getInstance();
     Tree resultData;
+    ICore::TargetState oldState;
 
-    if(m_targetState == ICore::TARGET_RUNNING)
+    if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
     {
         if(m_inf)
             m_inf->ICore_onMessage("Program is currently running");
@@ -414,7 +428,12 @@ void Core::gdbRun()
     }
 
     m_pid = 0;
-    com.commandF(&resultData, "-exec-run");
+    oldState = m_targetState;
+    m_targetState = ICore::TARGET_STARTING;
+    GdbResult rc = com.commandF(&resultData, "-exec-run");
+    if(rc == GDB_ERROR)
+        m_targetState = oldState;
+
 
 }
 
@@ -427,7 +446,7 @@ void Core::gdbContinue()
     Com& com = Com::getInstance();
     Tree resultData;
 
-    if(m_targetState == ICore::TARGET_RUNNING)
+    if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
     {
         if(m_inf)
             m_inf->ICore_onMessage("Program is currently running");
@@ -438,23 +457,13 @@ void Core::gdbContinue()
 
 }
 
-void Core::excute(QString cmd)
-{
-    Com& com = Com::getInstance();
-    Tree resultData;
 
-    if(m_targetState == ICore::TARGET_RUNNING)
-    {
-        if(m_inf)
-            m_inf->ICore_onMessage("Program is currently running");
-        return;
-    }
-
-    com.commandF(&resultData, "-interpreter-exec console \"%s\" ", stringToCStr(cmd));
-}
-
+/**
+ * @brief Tries to stop the program.
+ */ 
 void Core::stop()
 {
+    Com& com = Com::getInstance();
 
     if(m_targetState != ICore::TARGET_RUNNING)
     {
@@ -468,6 +477,18 @@ void Core::stop()
     {
         Com& com = Com::getInstance();
         Tree resultData;
+
+        // Send 'kill' to interrupt gdbserver
+        debugMsg("sending INTR to %d", m_pid);
+        if(m_pid == 0)
+            m_pid = com.getPid();
+            
+        if(m_pid != 0)
+            kill(m_pid, SIGINT);
+        else
+            errorMsg("Failed to stop since PID not known");
+
+
         com.command(NULL, "-exec-interrupt --all");
         com.command(NULL, "-exec-step-instruction");
         
@@ -482,6 +503,10 @@ void Core::stop()
     }
 }
 
+
+/**
+ * @brief Execute the next row in the program.
+ */
 void Core::gdbNext()
 {
     Com& com = Com::getInstance();
@@ -499,6 +524,9 @@ void Core::gdbNext()
 }
 
 
+/**
+ * @brief Request a list of stack frames.
+ */
 void Core::getStackFrames()
 {
     Com& com = Com::getInstance();
@@ -508,7 +536,9 @@ void Core::getStackFrames()
 }
 
 
-
+/**
+ * @brief Step in the current line.
+ */
 void Core::gdbStepIn()
 {
     Com& com = Com::getInstance();
@@ -528,6 +558,9 @@ void Core::gdbStepIn()
 }
 
 
+/**
+ * @brief Step out of the current function.
+ */
 void Core::gdbStepOut()
 {
     Com& com = Com::getInstance();
@@ -553,6 +586,11 @@ Core& Core::getInstance()
 }
 
 
+/**
+ * @brief Adds a watch for a variable.
+ * @param varName   The name of the variable to watch
+ * @return 0 on success.
+ */
 int Core::gdbAddVarWatch(QString varName, QString *varType, QString *value, QString *watchId_, bool *hasChildren)
 {
     Com& com = Com::getInstance();
@@ -598,7 +636,11 @@ int Core::gdbAddVarWatch(QString varName, QString *varType, QString *value, QStr
 }
 
 
-void Core::gdbExpandVarWatchChildren(QString watchId)
+/**
+ * @brief Expands all the children of a watched variable.
+ * @return 0 on success.
+ */
+int Core::gdbExpandVarWatchChildren(QString watchId)
 {
     int res;
     Tree resultData;
@@ -612,7 +654,7 @@ void Core::gdbExpandVarWatchChildren(QString watchId)
 
     if(res != 0)
     {
-        return;
+        return -1;
     }
 
         
@@ -633,10 +675,14 @@ void Core::gdbExpandVarWatchChildren(QString watchId)
             hasChildren = true;
         m_inf->ICore_onWatchVarChildAdded(childName, childExp, childValue, childType, hasChildren);
     }
-    
+
+    return 0;
 }
 
 
+/**
+ * @brief Returns the variable name that is being watched.
+ */
 QString Core::gdbGetVarWatchName(QString watchId)
 {
     if(m_watchList.contains(watchId))
@@ -649,6 +695,9 @@ QString Core::gdbGetVarWatchName(QString watchId)
         return watchId.mid(divPos+1);
 }
 
+/**
+ * @brief Removes a watch.
+ */
 void Core::gdbRemoveVarWatch(QString watchId)
 {
     Com& com = Com::getInstance();
@@ -703,6 +752,7 @@ void Core::onNotifyAsyncOut(Tree &tree, AsyncClass ac)
     tree.dump();
 }
 
+
 ICore::StopReason Core::parseReasonString(QString reasonString)
 {
     if( reasonString == "breakpoint-hit")
@@ -724,6 +774,7 @@ ICore::StopReason Core::parseReasonString(QString reasonString)
     return ICore::UNKNOWN;
 }
     
+
 void Core::onExecAsyncOut(Tree &tree, AsyncClass ac)
 {
     Com& com = Com::getInstance();
@@ -766,7 +817,7 @@ void Core::onExecAsyncOut(Tree &tree, AsyncClass ac)
         else
             reason = parseReasonString(reasonString);
 
-        if(reason == ICore::EXITED_NORMALLY)
+        if(reason == ICore::EXITED_NORMALLY || reason == ICore::EXITED)
         {
             m_targetState = ICore::TARGET_FINISHED;
         }
@@ -829,6 +880,9 @@ void Core::onExecAsyncOut(Tree &tree, AsyncClass ac)
 }
 
 
+/**
+ * @brief Remove a breakpoint.
+ */
 void Core::gdbRemoveBreakpoint(BreakPoint* bkpt)
 {
     Com& com = Com::getInstance();
@@ -846,29 +900,12 @@ void Core::gdbRemoveBreakpoint(BreakPoint* bkpt)
     
 }
 
-void Core::gdbEnableBreakpoint(BreakPoint *bkpt, bool enabled)
-{
-    Com& com = Com::getInstance();
-    Tree resultData;
-
-    assert(bkpt != NULL);
-
-    if (enabled) {
-        com.commandF(&resultData, "-break-enable %d", bkpt->m_number);
-    } else {
-        com.commandF(&resultData, "-break-disable %d", bkpt->m_number);
-    }
-
-    if(m_inf)
-        m_inf->ICore_onBreakpointsChanged();
-}
-
 void Core::gdbGetThreadList()
 {
     Com& com = Com::getInstance();
     Tree resultData;
 
-    if(m_targetState == ICore::TARGET_RUNNING)
+    if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
     {
         if(m_inf)
             m_inf->ICore_onMessage("Program is currently running");
@@ -882,6 +919,9 @@ void Core::gdbGetThreadList()
 }
 
 
+/**
+ * @brief Find a breakpoint based on path and linenumber.
+ */
 BreakPoint* Core::findBreakPoint(QString fullPath, int lineNo)
 {
     for(int i = 0;i < m_breakpoints.size();i++)
@@ -899,6 +939,9 @@ BreakPoint* Core::findBreakPoint(QString fullPath, int lineNo)
 }
 
 
+/**
+ * @brief Finds a breakpoint by number.
+ */
 BreakPoint* Core::findBreakPointByNumber(int number)
 {
     for(int i = 0;i < m_breakpoints.size();i++)
@@ -929,9 +972,24 @@ void Core::dispatchBreakpointTree(Tree &tree)
     }
     bkpt->lineNo = lineNo;
     bkpt->fullname = tree.getString("bkpt/fullname");
+
+    // We did not receive 'fullname' from gdb.
+    // Lets try original-location instead...
+    if(bkpt->fullname.isEmpty())
+    {
+        QString orgLoc = tree.getString("bkpt/original-location");
+        int divPos = orgLoc.lastIndexOf(":");
+        if(divPos == -1)
+            warnMsg("Original-location in unknown format");
+        else
+        {
+            bkpt->fullname = orgLoc.left(divPos);
+        }
+    }
+    
     bkpt->m_funcName = tree.getString("bkpt/func");
     bkpt->m_addr = tree.getLongLong("bkpt/addr");
-    bkpt->enabled = (tree.getString("bkpt/enabled") == "y");
+
     if(m_inf)
         m_inf->ICore_onBreakpointsChanged();
 
@@ -987,11 +1045,13 @@ void Core::onResult(Tree &tree)
                 QString threadId = tree.getString(treePath + "/id");
                 QString targetId = tree.getString(treePath + "/target-id");
                 QString funcName = tree.getString(treePath + "/frame/func");
+                QString details = tree.getString(treePath + "/details");
 
                 
                 ThreadInfo tinfo;
                 tinfo.id = atoi(stringToCStr(threadId));
                 tinfo.m_name = targetId;
+                tinfo.m_details = details;
                 tinfo.m_func = funcName;
                 m_threadList[tinfo.id] = tinfo;
             }
@@ -1145,6 +1205,10 @@ void Core::onLogStreamOutput(QString str)
         infoMsg("GDB | Log-stream | %s", stringToCStr(list[i]));
 }
 
+
+/**
+ * @brief Adds a breakpoint on a specified linenumber.
+ */
 int Core::gdbSetBreakpoint(QString filename, int lineNo)
 {
     Com& com = Com::getInstance();
@@ -1157,16 +1221,25 @@ int Core::gdbSetBreakpoint(QString filename, int lineNo)
     if(res == GDB_ERROR)
     {
         rc = -1;
+        errorMsg("Failed to set breakpoint at %s:%d", stringToCStr(filename), lineNo);
     }
     
     return rc;
 }
 
+
+/**
+ * @brief Returns a list of threads.
+ */
 QList<ThreadInfo> Core::getThreadList()
 {
     return m_threadList.values();
 }
 
+
+/**
+ * @brief Changes context to a specified thread.
+ */
 void Core::selectThread(int threadId)
 {
     if(m_selectedThreadId == threadId)
@@ -1176,10 +1249,12 @@ void Core::selectThread(int threadId)
     Tree resultData;
     
     
-    com.commandF(&resultData, "-thread-select %d", threadId);
+    if(com.commandF(&resultData, "-thread-select %d", threadId) == GDB_DONE)
+    {
 
         
-    m_selectedThreadId = threadId;
+        m_selectedThreadId = threadId;
+    }
 }
 
 
@@ -1193,7 +1268,7 @@ void Core::selectFrame(int selectedFrameIdx)
     Com& com = Com::getInstance();
     Tree resultData;
 
-    if(m_targetState == ICore::TARGET_RUNNING)
+    if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
     {
         return;
     }

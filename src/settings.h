@@ -61,6 +61,7 @@ class Settings
         QStringList m_initCommands;
         QString m_gdbPath;
         QString m_lastProgram;
+        bool m_download;
 
         QString m_fontFamily;
         int m_fontSize;
@@ -75,9 +76,18 @@ class Settings
 
         bool m_reloadBreakpoints;
         QString m_initialBreakpoint;
-        bool m_attachMode;
-
+        
         QList<SettingsBreakpoint> m_breakpoints;
+
+        QColor m_clrBackground;
+        QColor m_clrComment;
+        QColor m_clrString;
+        QColor m_clrIncString;
+        QColor m_clrKeyword;
+        QColor m_clrCppKeyword;
+        QColor m_clrNumber;
+        QColor m_clrForeground;
+       
 };
 
 #endif // FILE_SETTINGS_H

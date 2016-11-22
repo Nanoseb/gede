@@ -151,14 +151,14 @@
            </property>
           </widget>
          </item>
+         <item row="3" column="0">
+          <widget class="QCheckBox" name="checkBox_download">
+           <property name="text">
+            <string>Download</string>
+           </property>
+          </widget>
+         </item>
         </layout>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="checkBox_attachMode">
-         <property name="text">
-          <string>Attach Mode</string>
-         </property>
-        </widget>
        </item>
        <item>
         <widget class="Line" name="line_2">

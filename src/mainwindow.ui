@@ -14,25 +14,120 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout_3">
+   <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QSplitter" name="splitter_2">
+     <widget class="QSplitter" name="splitter_4">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QSplitter" name="splitter">
+      <widget class="QSplitter" name="splitter_2">
        <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+        <enum>Qt::Vertical</enum>
        </property>
-       <widget class="QTabWidget" name="tabWidget">
+       <widget class="QSplitter" name="splitter">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <widget class="QTreeWidget" name="treeWidget_file">
+         <column>
+          <property name="text">
+           <string notr="true">1</string>
+          </property>
+         </column>
+        </widget>
+        <widget class="QTabWidget" name="editorTabWidget">
+         <property name="tabsClosable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QTabWidget" name="tabWidget_2">
+        <property name="currentIndex">
+         <number>1</number>
+        </property>
+        <widget class="QWidget" name="tab_4">
+         <attribute name="title">
+          <string>GDB Output</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <widget class="QPlainTextEdit" name="logView">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="baseSize">
+             <size>
+              <width>0</width>
+              <height>40</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="tab_5">
+         <attribute name="title">
+          <string>Target Output</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <widget class="QPlainTextEdit" name="targetOutputView"/>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+      </widget>
+      <widget class="QSplitter" name="splitter_3">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <widget class="QTreeWidget" name="autoWidget">
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="uniformRowHeights">
+         <bool>true</bool>
+        </property>
+        <column>
+         <property name="text">
+          <string notr="true">1</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QTreeWidget" name="varWidget">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="baseSize">
+         <size>
+          <width>80</width>
+          <height>1</height>
+         </size>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::ExtendedSelection</enum>
+        </property>
+        <property name="selectionBehavior">
+         <enum>QAbstractItemView::SelectRows</enum>
+        </property>
+        <column>
+         <property name="text">
+          <string notr="true">1</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QTabWidget" name="tabWidget">
         <property name="currentIndex">
-         <number>0</number>
+         <number>2</number>
         </property>
         <widget class="QWidget" name="tab">
          <attribute name="title">
@@ -50,102 +145,13 @@
           </item>
          </layout>
         </widget>
-        <widget class="QWidget" name="tab_7">
+        <widget class="QWidget" name="tab_2">
          <attribute name="title">
-          <string>Files</string>
-         </attribute>
-         <layout class="QVBoxLayout" name="verticalLayout">
-          <item>
-           <widget class="QTreeWidget" name="treeWidget_file">
-            <column>
-             <property name="text">
-              <string notr="true">1</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </widget>
-       <widget class="QTabWidget" name="editorTabWidget">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="tabsClosable">
-         <bool>true</bool>
-        </property>
-       </widget>
-       <widget class="QTabWidget" name="tabWidget_3">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="currentIndex">
-         <number>2</number>
-        </property>
-        <widget class="QWidget" name="tab_11">
-         <attribute name="title">
-          <string>Local</string>
-         </attribute>
-         <layout class="QVBoxLayout" name="verticalLayout_7">
-          <item>
-           <widget class="QTreeWidget" name="autoWidget">
-            <property name="editTriggers">
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="uniformRowHeights">
-             <bool>true</bool>
-            </property>
-            <column>
-             <property name="text">
-              <string notr="true">1</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-         </layout>
-         <zorder>autoWidget</zorder>
-         <zorder>autoWidget</zorder>
-        </widget>
-        <widget class="QWidget" name="tab_12">
-         <attribute name="title">
-          <string>Watch</string>
+          <string>Breakpoints</string>
          </attribute>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <widget class="QTreeWidget" name="varWidget">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="baseSize">
-             <size>
-              <width>80</width>
-              <height>1</height>
-             </size>
-            </property>
-            <property name="editTriggers">
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::ExtendedSelection</enum>
-            </property>
-            <property name="selectionBehavior">
-             <enum>QAbstractItemView::SelectRows</enum>
-            </property>
+           <widget class="QTreeWidget" name="treeWidget_breakpoints">
             <column>
              <property name="text">
               <string notr="true">1</string>
@@ -155,11 +161,11 @@
           </item>
          </layout>
         </widget>
-        <widget class="QWidget" name="tab_14">
+        <widget class="QWidget" name="tab_3">
          <attribute name="title">
           <string>Stack</string>
          </attribute>
-         <layout class="QVBoxLayout" name="verticalLayout_11">
+         <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
            <widget class="QTreeWidget" name="treeWidget_stack">
             <column>
@@ -173,63 +179,6 @@
         </widget>
        </widget>
       </widget>
-      <widget class="QTabWidget" name="tabWidget_2">
-       <property name="currentIndex">
-        <number>0</number>
-       </property>
-       <widget class="QWidget" name="tab_4">
-        <attribute name="title">
-         <string>GDB Output</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_5">
-         <item>
-          <widget class="QPlainTextEdit" name="logView">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="baseSize">
-            <size>
-             <width>0</width>
-             <height>40</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="cmd"/>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="tab_5">
-        <attribute name="title">
-         <string>Target Output</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_6">
-         <item>
-          <widget class="QPlainTextEdit" name="targetOutputView"/>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="tab_13">
-        <attribute name="title">
-         <string>Breakpoints</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_10">
-         <item>
-          <widget class="QTreeWidget" name="treeWidget_breakpoints">
-           <column>
-            <property name="text">
-             <string notr="true">1</string>
-            </property>
-           </column>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </widget>
      </widget>
     </item>
    </layout>
@@ -240,12 +189,12 @@
      <x>0</x>
      <y>0</y>
      <width>881</width>
-     <height>29</height>
+     <height>27</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>Fi&amp;le</string>
+     <string>File</string>
     </property>
     <addaction name="actionSettings"/>
     <addaction name="separator"/>
@@ -253,7 +202,7 @@
    </widget>
    <widget class="QMenu" name="menuExecution">
     <property name="title">
-     <string>E&amp;xecution</string>
+     <string>Execution</string>
     </property>
     <addaction name="actionRun"/>
     <addaction name="actionStop"/>
@@ -300,7 +249,7 @@
      <normaloff>:/images/res/quit.png</normaloff>:/images/res/quit.png</iconset>
    </property>
    <property name="text">
-    <string>&amp;Quit</string>
+    <string>Quit</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
@@ -312,7 +261,7 @@
      <normaloff>:/images/res/step_over.png</normaloff>:/images/res/step_over.png</iconset>
    </property>
    <property name="text">
-    <string>&amp;Next</string>
+    <string>Next</string>
    </property>
    <property name="shortcut">
     <string>F6</string>
@@ -324,7 +273,7 @@
      <normaloff>:/images/res/step_into.png</normaloff>:/images/res/step_into.png</iconset>
    </property>
    <property name="text">
-    <string>Step &amp;In</string>
+    <string>Step In</string>
    </property>
    <property name="shortcut">
     <string>F5</string>
@@ -332,7 +281,7 @@
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>&amp;About</string>
+    <string>About</string>
    </property>
   </action>
   <action name="actionStop">
@@ -341,7 +290,7 @@
      <normaloff>:/images/res/stop.png</normaloff>:/images/res/stop.png</iconset>
    </property>
    <property name="text">
-    <string>&amp;Stop</string>
+    <string>Stop</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+F2</string>
@@ -353,7 +302,7 @@
      <normaloff>:/images/res/continue.png</normaloff>:/images/res/continue.png</iconset>
    </property>
    <property name="text">
-    <string>&amp;Continue</string>
+    <string>Continue</string>
    </property>
    <property name="shortcut">
     <string>F8</string>
@@ -365,7 +314,7 @@
      <normaloff>:/images/res/restart.png</normaloff>:/images/res/restart.png</iconset>
    </property>
    <property name="text">
-    <string>&amp;Run</string>
+    <string>Run</string>
    </property>
    <property name="shortcut">
     <string>F11</string>
@@ -373,7 +322,7 @@
   </action>
   <action name="actionSettings">
    <property name="text">
-    <string>&amp;Settings</string>
+    <string>Settings</string>
    </property>
   </action>
   <action name="actionStep_Out">
@@ -382,7 +331,7 @@
      <normaloff>:/images/res/step_out.png</normaloff>:/images/res/step_out.png</iconset>
    </property>
    <property name="text">
-    <string>Step &amp;Out</string>
+    <string>Step Out</string>
    </property>
    <property name="shortcut">
     <string>F7</string>

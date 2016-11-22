@@ -34,11 +34,24 @@ void Settings::loadDefaultsGui()
     m_gdbOutputFontFamily = "Monospace";
     m_gdbOutputFontSize = 8;
 
+
+    m_clrBackground = Qt::black;
+    m_clrComment = Qt::green;
+    m_clrString = QColor(0,125, 250);
+    m_clrIncString = QColor(0,125, 250);
+    m_clrKeyword = Qt::yellow;
+    m_clrCppKeyword = QColor(240,110,110);
+    m_clrNumber = Qt::magenta;
+    m_clrForeground = Qt::white;
+
 }
 
 void Settings::loadDefaultsAdvanced()
 {
     m_sourceIgnoreDirs.clear();
+    m_sourceIgnoreDirs.append("/build");
+    m_sourceIgnoreDirs.append("/usr");
+    
 }
 
 
@@ -85,6 +98,7 @@ void Settings::loadProjectConfig()
 
 
     
+    m_download = tmpIni.getBool("Download", true);
     m_connectionMode = tmpIni.getInt("Mode", MODE_LOCAL) == MODE_LOCAL ? MODE_LOCAL : MODE_TCP;
     m_tcpPort = tmpIni.getInt("TcpPort", 2000);
     m_tcpHost = tmpIni.getString("TcpHost", "localhost");
@@ -98,7 +112,6 @@ void Settings::loadProjectConfig()
 
     m_initialBreakpoint = tmpIni.getString("InitialBreakpoint","main");
     
-    m_attachMode = tmpIni.getBool("AttachMode", false);
 
     //
     QStringList breakpointStringList;
@@ -138,6 +151,7 @@ void Settings::saveProjectConfig()
     tmpIni.appendLoad(filepath);
 
     //
+    tmpIni.setBool("Download", m_download);
     tmpIni.setInt("TcpPort", m_tcpPort);
     tmpIni.setString("TcpHost", m_tcpHost);
     tmpIni.setInt("Mode", (int)m_connectionMode);
@@ -153,7 +167,6 @@ void Settings::saveProjectConfig()
 
     tmpIni.setString("InitialBreakpoint",m_initialBreakpoint);
     
-    tmpIni.setBool("AttachMode", m_attachMode);
     //
     QStringList breakpointStringList;
     for(int i = 0;i < m_breakpoints.size();i++)

@@ -19,10 +19,11 @@
 
 struct ThreadInfo
 {
-    int id;
-    QString m_name;
+    int id;             //!< The numeric id assigned to the thread by GDB.
+    QString m_name;     //!< Target-specific string identifying the thread.
 
-    QString m_func;
+    QString m_func; 
+    QString m_details;  //!< Additional information about the thread provided by the target.
 };
 
 
@@ -56,7 +57,6 @@ public:
     int lineNo;
     QString m_funcName;
     unsigned long long m_addr;
-    bool enabled;
     
 private:
     BreakPoint(){};
@@ -85,7 +85,8 @@ class ICore
 
     enum TargetState 
     {
-        TARGET_STOPPED, 
+        TARGET_STOPPED,
+        TARGET_STARTING,
         TARGET_RUNNING,
         TARGET_FINISHED 
     }; 
@@ -192,7 +193,7 @@ public:
     void gdbGetThreadList();
     void getStackFrames();
     void stop();
-    void gdbExpandVarWatchChildren(QString watchId);
+    int gdbExpandVarWatchChildren(QString watchId);
     int gdbGetMemory(uint64_t addr, size_t count, QByteArray *data);
     
     void selectThread(int threadId);
@@ -203,7 +204,6 @@ public:
     BreakPoint* findBreakPoint(QString fullPath, int lineNo);
     BreakPoint* findBreakPointByNumber(int number);
     void gdbRemoveBreakpoint(BreakPoint* bkpt);
-    void gdbEnableBreakpoint(BreakPoint* bkpt, bool enabled);
 
     QList<ThreadInfo> getThreadList();
     
@@ -211,7 +211,6 @@ public:
     QVector <SourceFile*> getSourceFiles() { return m_sourceFiles; };
 
 
-    void excute(QString cmd);
 private slots:
         void onGdbOutput(int socketNr);
 

@@ -43,15 +43,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_ui.treeWidget_breakpoints->setColumnCount(2);
     m_ui.treeWidget_breakpoints->setColumnWidth(0, 80);
     names.clear();
-    names += "ID";
     names += "Filename";
     names += "Func";
     names += "Line";
     names += "Addr";
-    names += "Enabled";
     m_ui.treeWidget_breakpoints->setHeaderLabels(names);
     connect(m_ui.treeWidget_breakpoints, SIGNAL(itemDoubleClicked ( QTreeWidgetItem * , int  )), this, SLOT(onBreakpointsWidgetItemDoubleClicked(QTreeWidgetItem * ,int)));
-    connect(m_ui.treeWidget_breakpoints, SIGNAL(itemClicked(QTreeWidgetItem*,int)), this, SLOT(onBreakpointsEnableDisable(QTreeWidgetItem*,int)));
 
 
 
@@ -67,18 +64,20 @@ MainWindow::MainWindow(QWidget *parent)
     treeWidget->setColumnWidth(0, 200);
 
 
-    //
+    // Thread widget
     treeWidget = m_ui.treeWidget_threads;
     names.clear();
     names += "Name";
+    names += "Details";
     treeWidget->setHeaderLabels(names);
-    treeWidget->setColumnCount(1);
-    treeWidget->setColumnWidth(0, 200);
+    treeWidget->setColumnCount(2);
+    treeWidget->setColumnWidth(0, 150);
+    treeWidget->setColumnWidth(1, 100);
 
     connect(m_ui.treeWidget_threads, SIGNAL(itemSelectionChanged()), this,
                 SLOT(onThreadWidgetSelectionChanged()));
 
-    //
+    // Stack widget
     treeWidget = m_ui.treeWidget_stack;
     names.clear();
     names += "Name";
@@ -93,33 +92,33 @@ MainWindow::MainWindow(QWidget *parent)
 
     //
     QList<int> slist;
-    slist.append(150);
-    slist.append(400);
-    slist.append(200);
+    slist.append(100);
+    slist.append(300);
     m_ui.splitter->setSizes(slist);
 
      
     //
     QList<int> slist2;
-    slist2.append(300);
-    slist2.append(200);
+    slist2.append(500);
+    slist2.append(70);
     m_ui.splitter_2->setSizes(slist2);
 
 
 
     //
-//    QList<int> slist3;
-//    slist3.append(400);
-//    slist3.append(120);
-//    m_ui.splitter_3->setSizes(slist3);
+    QList<int> slist3;
+    slist3.append(300);
+    slist3.append(120);
+    slist3.append(120);
+    m_ui.splitter_3->setSizes(slist3);
 
 
 
     //
-//    QList<int> slist4;
-//    slist4.append(300);
-//    slist4.append(120);
-//    m_ui.splitter_4->setSizes(slist4);
+    QList<int> slist4;
+    slist4.append(300);
+    slist4.append(120);
+    m_ui.splitter_4->setSizes(slist4);
 
      
 
@@ -151,7 +150,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_ui.editorTabWidget, SIGNAL(tabCloseRequested(int)), SLOT(onCodeViewTab_tabCloseRequested(int)));
     connect(m_ui.editorTabWidget, SIGNAL(currentChanged(int)), SLOT(onCodeViewTab_currentChanged(int)));
-    connect(m_ui.cmd, SIGNAL(returnPressed()),SLOT(onCmd_returnPressed()));
+    
     statusBar()->addPermanentWidget(&m_statusLineWidget);
 }
 
@@ -198,10 +197,15 @@ void MainWindow::ICore_onStopped(ICore::StopReason reason, QString path, int lin
 {
     Q_UNUSED(reason);
 
-    if(reason == ICore::EXITED_NORMALLY)
+
+    if(reason == ICore::EXITED_NORMALLY || reason == ICore::EXITED)
     {
         QString title = "Program exited";
-        QString text = "Program exited normally";
+        QString text;
+        if(reason == ICore::EXITED_NORMALLY)
+            text = "Program exited normally";
+        else
+            text = "Program exited";
         QMessageBox::information (this, title, text); 
     }
     
@@ -575,24 +579,6 @@ void MainWindow::onCodeViewTab_currentChanged( int tabIdx)
     Q_UNUSED(tabIdx);
 }
 
-void MainWindow::onCmd_returnPressed()
-{
-    Core &core = Core::getInstance();
-    core.excute(m_ui.cmd->text());
-}
-
-void MainWindow::onBreakpointsEnableDisable(QTreeWidgetItem *item, int column)
-{
-    if (column == 5) {
-        Core &core = Core::getInstance();
-        QList<BreakPoint*>  bklist = core.getBreakPoints();
-        int i = item->data(0, Qt::UserRole).toInt();
-        BreakPoint* bk = bklist[i];
-        bk->enabled = !bk->enabled;
-        core.gdbEnableBreakpoint(bk, bk->enabled);
-    }
-}
-
 
 void MainWindow::onCodeViewTab_tabCloseRequested ( int tabIdx)
 {
@@ -787,11 +773,13 @@ void MainWindow::ICore_onThreadListChanged()
     {
         // Get name
         QString name = list[idx].m_name;
+        QString desc = list[idx].m_details;
         
 
         // Add the item
         QStringList names;
         names.push_back(name);
+        names.push_back(desc);
         QTreeWidgetItem *item = new QTreeWidgetItem(names);
         item->setData(0, Qt::UserRole, list[idx].id);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
@@ -805,19 +793,23 @@ void MainWindow::ICore_onCurrentThreadChanged(int threadId)
 {
     QTreeWidget *threadWidget = m_ui.treeWidget_threads;
     QTreeWidgetItem *rootItem = threadWidget->invisibleRootItem();
+    threadWidget->clearSelection();
+    QTreeWidgetItem *selectItem = NULL;
     for(int i = 0;i < rootItem->childCount();i++)
     {
         QTreeWidgetItem *item = rootItem->child(i);
-    
-        int id = item->data(0, Qt::UserRole).toInt();
-        if(id == threadId)
+        assert(item != NULL);
+        if(item)
         {
-            item->setSelected(true);    
+            int id = item->data(0, Qt::UserRole).toInt();
+            if(id == threadId)
+            {
+                selectItem = item;
+            }
         }
-        else
-            item->setSelected(false);
     }
-    
+    if(selectItem)
+        threadWidget->setCurrentItem(selectItem);
 }
 
 
@@ -850,22 +842,17 @@ void MainWindow::ICore_onBreakpointsChanged()
 
         QStringList nameList;
         QString name;
-        nameList.append(QString::number(bk->m_number));
         nameList.append(getFilenamePart(bk->fullname));
         nameList.append(bk->m_funcName);
         name.sprintf("%d", bk->lineNo);
         nameList.append(name);
         nameList.append(longLongToHexString(bk->m_addr));
         
+        
 
         QTreeWidgetItem *item = new QTreeWidgetItem(nameList);
         item->setData(0, Qt::UserRole, i);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-        if (bk->enabled) {
-            item->setCheckState(5, Qt::Checked);
-        } else {
-            item->setCheckState(5, Qt::Unchecked);
-        }
 
         // Add the item to the widget
         m_ui.treeWidget_breakpoints->insertTopLevelItem(0, item);
@@ -934,10 +921,9 @@ void MainWindow::ICore_onStackFrameChange(QList<StackFrameEntry> stackFrameList)
 void MainWindow::ICore_onCurrentFrameChanged(int frameIdx)
 {
     QTreeWidget *threadWidget = m_ui.treeWidget_stack;
-    QTreeWidgetItem *rootItem = threadWidget->invisibleRootItem();
 
     // Update the sourceview (with the current row).
-    if(frameIdx < m_stackFrameList.size())
+    if(frameIdx >= 0 && frameIdx < m_stackFrameList.size())
     {
         StackFrameEntry &entry = m_stackFrameList[m_stackFrameList.size()-frameIdx-1];
 
@@ -946,18 +932,20 @@ void MainWindow::ICore_onCurrentFrameChanged(int frameIdx)
     }
 
     // Update the selection of the current thread
+    QTreeWidgetItem *rootItem = threadWidget->invisibleRootItem();
+    threadWidget->clearSelection();
+    QTreeWidgetItem *selectItem = NULL;
     for(int i = 0;i < rootItem->childCount();i++)
     {
         QTreeWidgetItem *item = rootItem->child(i);
-    
         int id = item->data(0, Qt::UserRole).toInt();
         if(id == frameIdx)
         {
-            item->setSelected(true);    
+            selectItem = item;
         }
-        else
-            item->setSelected(false);
     }
+    if(selectItem)
+        threadWidget->setCurrentItem(selectItem);
     
 }
 
@@ -1337,17 +1325,22 @@ void MainWindow::ICore_onTargetOutput(QString message)
 
 void MainWindow::ICore_onStateChanged(TargetState state)
 {
-    m_ui.actionNext->setEnabled(state == TARGET_STOPPED ? true : false);
-    m_ui.actionStep_In->setEnabled(state == TARGET_STOPPED ? true : false);
-    m_ui.actionStep_Out->setEnabled(state == TARGET_STOPPED ? true : false);
-    m_ui.actionStop->setEnabled(state == TARGET_STOPPED ? false : true);
-    m_ui.actionContinue->setEnabled(state == TARGET_STOPPED ? true : false);
-    m_ui.actionRun->setEnabled((state == TARGET_STOPPED &&  m_cfg.m_attachMode == false) ? true : false);
+    bool isRunning = true;
+    if (state == TARGET_STOPPED || state == TARGET_FINISHED)
+        isRunning = false;
+    bool isStopped = state == TARGET_STOPPED ? true : false;
+    
+    m_ui.actionNext->setEnabled(isStopped);
+    m_ui.actionStep_In->setEnabled(isStopped);
+    m_ui.actionStep_Out->setEnabled(isStopped);
+    m_ui.actionStop->setEnabled(isRunning);
+    m_ui.actionContinue->setEnabled(isStopped);
+    m_ui.actionRun->setEnabled(!isRunning);
 
-    m_ui.varWidget->setEnabled(state == TARGET_STOPPED ? true : false);
+    m_ui.varWidget->setEnabled(isStopped);
 
     
-    if(state == TARGET_RUNNING)
+    if(state == TARGET_STARTING || state == TARGET_RUNNING)
     {
         m_ui.treeWidget_stack->clear();
         m_ui.autoWidget->clear();
