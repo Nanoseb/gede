@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -12,8 +12,11 @@
 #include "com.h"
 #include <QList>
 #include <QMap>
+#include <QHash>
 #include <QSocketNotifier>
 #include <QObject>
+#include <QVector>
+
 
 #include "settings.h"
 
@@ -66,15 +69,72 @@ private:
 /**
  * @brief The value of a variable.
  */
-class CoreVarValue
+class CoreVar
 {
 public:
-    CoreVarValue(QString str) { m_str = str; };
+    CoreVar();
+    CoreVar(QString name);
+    virtual ~CoreVar();
 
-    QString toString();
+    typedef enum { FMT_HEX, FMT_DEC, FMT_BIN, FMT_CHAR, FMT_NATIVE } DispFormat;
+
+    QString getName() const { return m_name; };
+    QString getData(DispFormat fmt) const;
     
-    Tree *toTree();
-    QString m_str;
+    void setData(QString data);
+    long long getAddress();
+    void setAddress(long long addr) { m_address = addr; };
+
+    int getChildCount() { return m_children.size(); };
+    CoreVar* getChild(int idx) { return m_children[idx]; };
+    CoreVar* addChild(QString name);
+    
+    void valueFromGdbString(QString data);
+    
+private:
+    void clear();
+
+
+private:
+
+    QString m_name;
+    QVector <CoreVar*> m_children;
+    QVariant m_data;
+    long long m_address;
+    enum { TYPE_INT = 0, TYPE_FLOAT, TYPE_STRING, TYPE_ERROR_MSG, TYPE_CHAR, TYPE_UNKNOWN } m_type;
+
+};
+
+
+class VarWatch
+{
+    public:
+        VarWatch();
+        VarWatch(QString watchId_, QString name_);
+        
+        QString getName() { return name; };
+        QString getWatchId() { return watchId; };
+
+        bool hasChildren();
+        bool inScope() { return m_inScope;};
+        QString getVarType() { return m_varType; };
+        QString getValue(CoreVar::DispFormat fmt = CoreVar::FMT_NATIVE) { return m_var.getData(fmt); };
+
+        void setValue(QString value);
+    private:
+
+        QString watchId;
+        QString name;
+
+    public:
+        bool m_inScope;
+    private:
+        CoreVar m_var;
+    public:
+        QString m_varType;
+        bool m_hasChildren;
+        
+        QString m_parentWatchId;
 };
 
 
@@ -101,7 +161,7 @@ class ICore
         FUNCTION_FINISHED,
         EXITED
     };
-
+    
     enum SignalType
     {
         SIGINT,
@@ -113,10 +173,10 @@ class ICore
     virtual void ICore_onStateChanged(TargetState state) = 0;
     virtual void ICore_onSignalReceived(QString signalName) = 0;
     virtual void ICore_onLocalVarReset() = 0;
-    virtual void ICore_onLocalVarChanged(QString name, CoreVarValue value) = 0;
+    virtual void ICore_onLocalVarChanged(CoreVar* value) = 0;
     virtual void ICore_onFrameVarReset() = 0;
     virtual void ICore_onFrameVarChanged(QString name, QString value) = 0;
-    virtual void ICore_onWatchVarChanged(QString watchId, QString name, QString value, bool hasChildren) = 0;
+    virtual void ICore_onWatchVarChanged(VarWatch &watch) = 0;
     virtual void ICore_onConsoleStream(QString text) = 0;
     virtual void ICore_onBreakpointsChanged() = 0;
     virtual void ICore_onThreadListChanged() = 0;
@@ -133,16 +193,12 @@ class ICore
      * @param name       The name of the child.
      * @param valueString  The value of the child.
      */
-    virtual void ICore_onWatchVarChildAdded(QString watchId, QString name, QString valueString, QString varType, bool hasChildren) = 0;
+    virtual void ICore_onWatchVarChildAdded(VarWatch &watch) = 0;
     
 };
 
-struct VarWatch
-{
-    QString name;
-    QString watchId;
-};
-    
+
+
 
 
 class Core : public ComListener
@@ -177,6 +233,7 @@ private:
 
     void dispatchBreakpointTree(Tree &tree);
     static ICore::StopReason parseReasonString(QString string);
+    void detectMemoryDepth();
     
 public:
     int gdbSetBreakpointAtFunc(QString func);
@@ -186,9 +243,14 @@ public:
     void gdbContinue();
     void gdbRun();
     bool gdbGetFiles();
-    int gdbAddVarWatch(QString varName, QString *varType, QString *value, QString *watchId, bool *hasChildren);
-    void gdbRemoveVarWatch(QString watchId);
-    QString gdbGetVarWatchName(QString watchId);
+
+    int getMemoryDepth();
+
+    int changeWatchVariable(QString variable, QString newValue);
+    
+    QVector <CoreVar*>& getLocalVars() { return m_localVars; };
+
+
     int gdbSetBreakpoint(QString filename, int lineNo);
     void gdbGetThreadList();
     void getStackFrames();
@@ -206,8 +268,15 @@ public:
     void gdbRemoveBreakpoint(BreakPoint* bkpt);
 
     QList<ThreadInfo> getThreadList();
-    
 
+    // Watch
+    VarWatch *getVarWatchInfo(QString watchId);
+    QList <VarWatch*> getWatchChildren(VarWatch &watch);
+    int gdbAddVarWatch(QString varName, VarWatch **watchPtr);
+    void gdbRemoveVarWatch(QString watchId);
+    QString gdbGetVarWatchName(QString watchId);
+
+    
     QVector <SourceFile*> getSourceFiles() { return m_sourceFiles; };
 
 
@@ -224,13 +293,15 @@ private:
     ICore::TargetState m_lastTargetState;
     int m_pid;
     int m_currentFrameIdx;
-    QMap <QString, VarWatch> m_watchList;
+    QList <VarWatch*> m_watchList;
     int m_varWatchLastId;
     bool m_isRemote; //!< True if "remote target" or false if it is a "local target".
     int m_ptsFd;
     bool m_scanSources; //!< True if the source filelist may have changed
     QSocketNotifier  *m_ptsListener;
 
+    QVector <CoreVar*> m_localVars;
+    int m_memDepth; //!< The memory depth. (Either 64 or 32).
 };
 
 

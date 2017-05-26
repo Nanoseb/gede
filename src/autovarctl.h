@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -29,21 +29,23 @@ public:
 
     void setWidget(QTreeWidget *autoWidget);
 
-    void ICore_onLocalVarChanged(QString name, CoreVarValue varValue);
-
+    void ICore_onLocalVarChanged(CoreVar *varValue);
+    void ICore_onLocalVarReset();
+    
     void setConfig(Settings *cfg);
 
 private:
-    void addVariableDataTree(
-                QTreeWidget *treeWidget,
-                VarCtl::DispInfoMap *map,
-                QTreeWidgetItem *item, TreeNode *rootNode);
-    QTreeWidgetItem *insertTreeWidgetItem(
+    void createTreeWidgetItem(
+                    QTreeWidgetItem *parentItem,
                     VarCtl::DispInfoMap *map,
                     QString fullPath,
-                    QString name,
-                    QString value);
-                                
+                    CoreVar *varValue);
+    void selectedChangeDisplayFormat(VarCtl::DispFormat fmt);
+    QString getTreeWidgetItemPath(QTreeWidgetItem *item);
+
+    QString getDisplayString(CoreVar *var, QString fullPath);
+    CoreVar *getVar(QTreeWidgetItem &item);
+    
 public slots:
 
     void onContextMenu ( const QPoint &pos);
@@ -52,9 +54,13 @@ public slots:
     void onAutoWidgetItemDoubleClicked(QTreeWidgetItem *item, int column);
     void onShowMemory();
 
-
+    void onDisplayAsDec();
+    void onDisplayAsHex();
+    void onDisplayAsBin();
+    void onDisplayAsChar();
     
-public:
+    
+private:
     QTreeWidget *m_autoWidget;
     QMenu m_popupMenu;
     

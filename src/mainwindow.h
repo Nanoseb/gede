@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -38,6 +38,7 @@ class MainWindow : public QMainWindow, public ICore, public ICodeView
   Q_OBJECT
 public:
     MainWindow(QWidget *parent);
+    virtual ~MainWindow();
 
     CodeViewTab* open(QString filename);
     
@@ -49,8 +50,8 @@ public:
 public:
     void ICore_onStopped(ICore::StopReason reason, QString path, int lineNo);
     void ICore_onLocalVarReset();
-    void ICore_onLocalVarChanged(QString name, CoreVarValue varValue);
-    void ICore_onWatchVarChanged(QString watchId, QString name, QString value, bool hasChildren);
+    void ICore_onLocalVarChanged(CoreVar *varValue);
+    void ICore_onWatchVarChanged(VarWatch &watch);
     void ICore_onConsoleStream(QString text);
     void ICore_onBreakpointsChanged();
     void ICore_onThreadListChanged();
@@ -69,9 +70,13 @@ public:
     void ICodeView_onContextMenu(QPoint pos, int lineNo, QStringList text);
     void ICodeView_onContextMenuIncFile(QPoint pos, int lineNo, QString incFile);
     
-    void ICore_onWatchVarChildAdded(QString watchId, QString name, QString valueString, QString varType, bool hasChildren);
+    void ICore_onWatchVarChildAdded(VarWatch &watch);
     
 private:
+    void showEvent(QShowEvent *);
+    void closeEvent(QCloseEvent *e);
+
+    void showWidgets();
 
 public:
         
@@ -124,7 +129,24 @@ public slots:
     void onCodeViewTab_tabCloseRequested ( int index );
     void onCodeViewTab_currentChanged( int tabIdx);
     
-    
+    void onViewStack();
+    void onViewBreakpoints();
+    void onViewThreads();
+    void onViewWatch();
+    void onViewAutoVariables();
+    void onViewTargetOutput();
+    void onViewGdbOutput();
+    void onViewFileBrowser();
+    void onDefaultViewSetup();
+
+private:
+    QByteArray m_gui_default_mainwindowState;
+    QByteArray m_gui_default_mainwindowGeometry;
+    QByteArray m_gui_default_splitter1State;
+    QByteArray m_gui_default_splitter2State;
+    QByteArray m_gui_default_splitter3State;
+    QByteArray m_gui_default_splitter4State;
+
 private:
     Ui_MainWindow m_ui;
     QIcon m_fileIcon;

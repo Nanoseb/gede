@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -173,7 +173,7 @@ class Com : public QObject
         static const char* asyncClassToString(ComListener::AsyncClass ac);
 
         static Com& getInstance();
-        int init(QString gdbPath);
+        int init(QString gdbPath, bool enableDebugLog);
 
         void setListener(ComListener *listener) { m_listener = listener; };
 
@@ -184,6 +184,8 @@ class Com : public QObject
 
         static QList<Token*> tokenize(QString str);
 
+        void enableLog(bool enable);
+        
     private:
         int parseAsyncOutput(Resp *resp, ComListener::AsyncClass *ac);
         Resp *parseAsyncRecord();
@@ -204,7 +206,7 @@ class Com : public QObject
 
 
     private:
-        void readFromGdb(GdbResult *m_result, Tree *m_resultData);
+        int readFromGdb(GdbResult *m_result, Tree *m_resultData);
         void decodeGdbResponse();
         Token* pop_token();
         Token* peek_token();
@@ -213,6 +215,7 @@ class Com : public QObject
         void dispatchResp();
         bool isTokenPending();
         void readTokens();
+        void writeLogEntry(QString logText);
         
     private:
         QProcess m_process;
@@ -222,11 +225,10 @@ class Com : public QObject
         
         QList<Token*> m_freeTokens; //!< List of tokens allocated but not in use.
         QList<Token*> m_list;
-#ifdef ENABLE_GDB_LOG
         QFile m_logFile;
-#endif
         QByteArray m_inputBuffer; //!< List of raw characters received from the GDB process.
         int m_busy;
+        bool m_enableLog;
 };
 
 

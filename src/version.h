@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -9,9 +9,9 @@
 #ifndef FILE__VERSION_H
 #define FILE__VERSION_H
 
-#define GD_MAJOR 1
-#define GD_MINOR 15
-#define GD_PATCH 1
+#define GD_MAJOR 2
+#define GD_MINOR 0
+#define GD_PATCH 4
 
 
 #endif // FILE__VERSION_H

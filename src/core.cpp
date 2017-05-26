@@ -20,76 +20,223 @@
 #include <signal.h>
 #include <stdlib.h> // posix_openpt()
 #include <fcntl.h> //  O_RDWR
+#include <ctype.h>
 
-
-
-
-
-QString CoreVarValue::toString()
+VarWatch::VarWatch()
+    : m_inScope(true)
+    ,m_hasChildren(false)
 {
-    if(m_str.startsWith("{<"))
-    {
-        // Is it a message? Eg: "{<No data fields>}".
-        return m_str.mid(1,m_str.length()-2);
-    }
-    
-    return m_str;
+}
+
+VarWatch::VarWatch(QString watchId_, QString name_)
+  : watchId(watchId_)
+    ,name(name_)
+    ,m_inScope(true)
+    ,m_hasChildren(false)
+{
+
 }
 
 
-
-
-Tree* CoreVarValue::toTree()
+bool VarWatch::hasChildren()
 {
-    Tree *tree = NULL;
-    
-    QList<Token*> tokenList = GdbMiParser::tokenizeVarString(m_str);
+    return m_hasChildren;
+}
 
+void VarWatch::setValue(QString value)
+{
+    m_var.valueFromGdbString(value);
+}
+
+
+CoreVar::CoreVar()
+ : m_address(0)
+   ,m_type(TYPE_UNKNOWN)
+{
+
+}
+
+    
+CoreVar::CoreVar(QString name)
+    : m_name(name)
+    ,m_address(0)
+      ,m_type(TYPE_UNKNOWN)
+{
+
+}
+
+CoreVar::~CoreVar()
+{
+    clear();
+}
+
+CoreVar* CoreVar::addChild(QString name)
+{
+    CoreVar* child = new CoreVar(name);
+    m_children.push_back(child);
+    return child; 
+}
+    
+long long CoreVar::getAddress()
+{
+    return m_address;
+}
+
+void CoreVar::clear()
+{
+    for(int j = 0;j < m_children.size();j++)
+    {
+        CoreVar* child = m_children[j];
+        delete child;
+    }
+    m_children.clear();
+}
+
+void CoreVar::valueFromGdbString(QString data)
+{
+    QList<Token*> tokenList = GdbMiParser::tokenizeVarString(data);
     QList<Token*> orgList = tokenList;
 
-    if(tokenList.size() > 1)
-    {
-        Token* token;
-        token = tokenList.front();
-
-        if(token)
-        {
-            TreeNode *rootNode;
-            tree = new Tree;
-            rootNode = tree->getRoot();
-
-            // Is it a "@0x2202:" type?
-            if(token->getType() == Token::KEY_SNABEL)
-            {
-                Token *extraNameTok;
-                token = tokenList.takeFirst();
-                
-                extraNameTok = tokenList.takeFirst();
-                if(extraNameTok)
-                {
-                 
-                    rootNode->setAddress(extraNameTok->getString().toInt(0,0)); 
-                }
-            }
-
-
-            GdbMiParser::parseVariableData(rootNode, &tokenList);
-
-        }
-        
-    }
-    else
-    {
-        //errorMsg("Unknown token ('%s')", stringToCStr(token->getString()));
-    }
+    GdbMiParser::parseVariableData(this, &tokenList);
 
     for(int i = 0;i < orgList.size();i++)
     {
         Token *tok = orgList[i];
         delete tok;
     }
-    return tree;
+
 }
+
+void CoreVar::setData(QString data)
+{
+    m_data = data;
+
+
+    // A parent?
+    if(data == "...")
+    {
+        m_data = "{...}";
+        m_type = TYPE_UNKNOWN;
+    }
+    // String?
+    else if(data.startsWith('"'))
+    {
+        if(data.endsWith('"'))
+            data = data.mid(1, data.length()-2);
+        m_data = data;
+        m_type = TYPE_STRING;
+    }
+    // Character?
+    else if(data.startsWith('\''))
+    {
+        if(data.endsWith('\''))
+            data = data.mid(1, data.length()-2);
+        if(data.startsWith("\\0"))
+            m_data = (int)data.mid(2).toInt();
+        else
+            m_data = (int)data[0].toLatin1();
+        
+        m_type = TYPE_CHAR;
+    }
+    // Gdb Error message?
+    else if(data.endsWith(">"))
+    {
+        m_data = data;
+        m_type = TYPE_ERROR_MSG;
+    }
+    // Float?
+    else if(data.contains("."))
+    {
+        m_data = data;
+        m_type = TYPE_FLOAT;
+    }
+    // Integer?
+    else if(data.length() > 0)
+    {
+        if(data.startsWith("0x"))
+            m_data = (qulonglong)data.toULongLong(0,0);
+        else
+            m_data = data.toLongLong(0,0);
+        m_type = TYPE_INT;
+    }
+    else
+        m_type = TYPE_UNKNOWN;
+
+}
+
+
+QString CoreVar::getData(DispFormat fmt) const
+{
+    QString valueText;
+
+    if(m_type == TYPE_CHAR || m_type == TYPE_INT)
+    {
+        if((fmt == FMT_NATIVE && m_type == TYPE_CHAR) || fmt == FMT_CHAR)
+        {
+            QChar c = m_data.toInt();
+            char clat = c.toLatin1();
+            if(isprint(clat))
+                valueText.sprintf("%d '%c'", (int)m_data.toInt(), clat);
+            else
+                valueText.sprintf("%d ' '", (int)m_data.toInt());
+        }
+        else if(fmt == FMT_BIN)
+        {
+            QString subText;
+            QString reverseText;
+            qlonglong val = m_data.toULongLong();
+            do
+            {
+                subText.sprintf("%d", (int)(val & 0x1));
+                reverseText = subText + reverseText;
+                val = val>>1;
+            }
+            while(val > 0 || reverseText.length()%8 != 0);
+            for(int i = 0;i < reverseText.length();i++)
+            {
+                valueText += reverseText[i];
+                if(i%4 == 3 && i+1 != reverseText.length())
+                    valueText += "_";
+            }
+
+            valueText = "0b" + valueText;
+        }
+        else if(fmt == FMT_HEX)
+        {
+            QString text;
+            text.sprintf("%llx", m_data.toLongLong());
+
+            // Prefix the string with suitable number of zeroes
+            while(text.length()%4 != 0 && text.length() > 4)
+                text = "0" + text;
+            if(text.length()%2 != 0)
+                text = "0" + text;
+                
+            for(int i = 0;i < text.length();i++)
+            {
+                valueText = valueText + text[i];
+                if(i%4 == 3 && i+1 != text.length())
+                    valueText += "_";
+            }
+            valueText = "0x" + valueText;
+        }
+        else// if(fmt == FMT_DEC)
+        {
+            valueText = m_data.toString();
+        }
+    }
+    else if(m_type == TYPE_STRING)
+    {
+          valueText = '"' + m_data.toString() + '"';
+    }
+    else
+        valueText = m_data.toString();
+
+    return valueText;
+}
+
+    
+
 
 
 
@@ -104,6 +251,7 @@ Core::Core()
     ,m_isRemote(false)
     ,m_ptsFd(0)
     ,m_scanSources(false)
+    ,m_memDepth(32)
 {
     
     Com& com = Com::getInstance();
@@ -124,6 +272,20 @@ Core::Core()
 
 Core::~Core()
 {
+    // Clear the local var array
+    for(int j = 0;j < m_localVars.size();j++)
+    {
+        CoreVar *val = m_localVars[j];
+        delete val;
+    }
+    m_localVars.clear();
+
+    for(int i = 0;i < m_watchList.size();i++)
+    {
+        VarWatch* watch = m_watchList[i];
+        delete watch;
+    }
+
     delete m_ptsListener;
     
     Com& com = Com::getInstance();
@@ -140,6 +302,36 @@ Core::~Core()
 }
 
 
+/**
+ * @brief Returns the memory depth.
+ * @return 32 or 64.
+ */
+int Core::getMemoryDepth()
+{
+    return m_memDepth;
+}
+
+
+/**
+ * @brief Detects memory depth of target by communicating with Gdb.
+ */
+void Core::detectMemoryDepth()
+{
+    Tree resultData;
+    Com& com = Com::getInstance();
+    if(com.commandF(&resultData, "-data-evaluate-expression \"sizeof(void *)\""))
+    {
+        warnMsg("Failed to detect memory depth");    
+    }
+    else
+    {
+        int byteDepth = resultData.getInt("value");
+        m_memDepth = byteDepth*8;
+    }
+
+}
+
+
 int Core::initLocal(Settings *cfg, QString gdbPath, QString programPath, QStringList argumentList)
 {
     Com& com = Com::getInstance();
@@ -147,8 +339,8 @@ int Core::initLocal(Settings *cfg, QString gdbPath, QString programPath, QString
     int rc = 0;
 
     m_isRemote = false;
-    
-    if(com.init(gdbPath))
+
+    if(com.init(gdbPath, cfg->m_enableDebugLog))
     {
         errorMsg("Failed to start gdb ('%s')", stringToCStr(gdbPath));
         return -1;
@@ -156,12 +348,21 @@ int Core::initLocal(Settings *cfg, QString gdbPath, QString programPath, QString
     
     QString ptsDevPath = ptsname(m_ptsFd);
     
-    com.commandF(&resultData, "-inferior-tty-set %s", stringToCStr(ptsDevPath));
+    if(com.commandF(&resultData, "-inferior-tty-set %s", stringToCStr(ptsDevPath)))
+    {
+        rc = 1;
+        errorMsg("Failed to set inferior tty");
+    }
 
     if(com.commandF(&resultData, "-file-exec-and-symbols %s", stringToCStr(programPath)) == GDB_ERROR)
     {
         errorMsg("Failed to load '%s'", stringToCStr(programPath));
     }
+
+
+    // Get memory depth (32 or 64)
+    detectMemoryDepth();
+
 
     QString commandStr;
     if(argumentList.size() > 0)
@@ -210,7 +411,7 @@ int Core::initRemote(Settings *cfg, QString gdbPath, QString programPath, QStrin
 
     m_isRemote = true;
     
-    if(com.init(gdbPath))
+    if(com.init(gdbPath, cfg->m_enableDebugLog))
     {
         errorMsg("Failed to start gdb");
         return -1;
@@ -247,6 +448,8 @@ int Core::initRemote(Settings *cfg, QString gdbPath, QString programPath, QStrin
             com.commandF(&resultData, "-target-download");
     }
     
+    // Get memory depth (32 or 64)
+    detectMemoryDepth();
 
     gdbSetBreakpointAtFunc(cfg->m_initialBreakpoint);
     
@@ -268,7 +471,9 @@ void Core::onGdbOutput(int socketFd)
     {
         buff[n] = '\0';
     }
-    m_inf->ICore_onTargetOutput(buff);
+    QString str = buff;
+    str.replace("\r","");
+    m_inf->ICore_onTargetOutput(str);
 }
 
 
@@ -480,13 +685,17 @@ void Core::stop()
 
         // Send 'kill' to interrupt gdbserver
         debugMsg("sending INTR to %d", m_pid);
-        if(m_pid == 0)
-            m_pid = com.getPid();
+        int gdbPid = com.getPid();
             
-        if(m_pid != 0)
-            kill(m_pid, SIGINT);
+        if(gdbPid != 0)
+        {
+            debugMsg("Sending SIGINT to %d", gdbPid);
+            kill(gdbPid, SIGINT);
+        }
         else
-            errorMsg("Failed to stop since PID not known");
+        {
+            errorMsg("Failed to stop since PID of Gdb not known");
+        }
 
 
         com.command(NULL, "-exec-interrupt --all");
@@ -587,11 +796,45 @@ Core& Core::getInstance()
 
 
 /**
+ * @brief Returns info for an existing watch.
+ */
+VarWatch* Core::getVarWatchInfo(QString watchId)
+{
+    assert(watchId != "");
+    assert(watchId[0] == 'w');
+    for(int i = 0;i < m_watchList.size();i++)
+    {
+        VarWatch* watch = m_watchList[i];
+        if(watch->getWatchId() == watchId)
+            return watch;
+    }
+    return NULL;
+}
+
+
+/**
+ * @brief Returns all children of a watch.
+ */
+QList <VarWatch*> Core::getWatchChildren(VarWatch &parentWatch)
+{
+    QList <VarWatch*> list;
+    for(int i = 0;i < m_watchList.size();i++)
+    {
+        VarWatch* otherWatch = m_watchList[i];
+        if(parentWatch.getWatchId() == otherWatch->m_parentWatchId)
+            list.push_back(otherWatch);
+    }    
+    return list;
+}
+
+
+/**
  * @brief Adds a watch for a variable.
  * @param varName   The name of the variable to watch
+ * @param watchPtr  Pointer to a watch handle for the newly created watch.
  * @return 0 on success.
  */
-int Core::gdbAddVarWatch(QString varName, QString *varType, QString *value, QString *watchId_, bool *hasChildren)
+int Core::gdbAddVarWatch(QString varName, VarWatch** watchPtr)
 {
     Com& com = Com::getInstance();
     Tree resultData;
@@ -599,6 +842,8 @@ int Core::gdbAddVarWatch(QString varName, QString *varType, QString *value, QStr
     GdbResult res;
     int rc = 0;
 
+    *watchPtr = NULL;
+    
     watchId.sprintf("w%d", m_varWatchLastId++);
 
     assert(varName.isEmpty() == false);
@@ -620,17 +865,16 @@ int Core::gdbAddVarWatch(QString varName, QString *varType, QString *value, QStr
 
     // debugMsg("%s = %s = %s\n", stringToCStr(varName2),stringToCStr(varValue2), stringToCStr(varType2));
 
-    VarWatch w;
-    w.name = varName;
-    w.watchId = watchId;
-    m_watchList[watchId] = w;
+    VarWatch *w = new VarWatch(watchId,varName);
+    w->m_varType = varType2;
+    w->setValue(varValue2);
+    w->m_hasChildren = numChild > 0 ? true : false;
+    m_watchList.append(w);
     
-    *hasChildren = numChild == 0 ? false : true;
-    *varType = varType2;
-    *value = varValue2;
+        *watchPtr = w;
+        
     }
 
-    *watchId_ = watchId;
 
     return rc;
 }
@@ -646,9 +890,9 @@ int Core::gdbExpandVarWatchChildren(QString watchId)
     Tree resultData;
     Com& com = Com::getInstance();
 
-    // Get the variable name
-//    QString varName = m_watchList[watchId].name;
+    assert(getVarWatchInfo(watchId) != NULL);
 
+    
     // Request its children
     res = com.commandF(&resultData, "-var-list-children --all-values %s", stringToCStr(watchId));
 
@@ -665,7 +909,7 @@ int Core::gdbExpandVarWatchChildren(QString watchId)
         // Get name and value
         QString treePath;
         treePath.sprintf("children/#%d",i+1);
-        QString childName = resultData.getString(treePath + "/name");
+        QString childWatchId = resultData.getString(treePath + "/name");
         QString childExp = resultData.getString(treePath + "/exp");
         QString childValue = resultData.getString(treePath + "/value");
         QString childType = resultData.getString(treePath + "/type");
@@ -673,7 +917,21 @@ int Core::gdbExpandVarWatchChildren(QString watchId)
         bool hasChildren = false;
         if(numChild > 0)
             hasChildren = true;
-        m_inf->ICore_onWatchVarChildAdded(childName, childExp, childValue, childType, hasChildren);
+
+        VarWatch *watch = getVarWatchInfo(childWatchId);
+        if(watch == NULL)
+        {
+            watch = new VarWatch(childWatchId,childExp);
+            watch->m_inScope = true;
+            watch->setValue(childValue);
+            watch->m_varType = childType;
+            watch->m_hasChildren = hasChildren;
+            watch->m_parentWatchId = watchId;
+            m_watchList.append(watch);
+        }
+
+        m_inf->ICore_onWatchVarChildAdded(*watch);
+
     }
 
     return 0;
@@ -685,8 +943,9 @@ int Core::gdbExpandVarWatchChildren(QString watchId)
  */
 QString Core::gdbGetVarWatchName(QString watchId)
 {
-    if(m_watchList.contains(watchId))
-        return m_watchList[watchId].name;
+    VarWatch* watch = getVarWatchInfo(watchId);
+    if(watch)
+        return watch->getName();
     int divPos = watchId.lastIndexOf(".");
     assert(divPos != -1);
     if(divPos == -1)
@@ -703,21 +962,35 @@ void Core::gdbRemoveVarWatch(QString watchId)
     Com& com = Com::getInstance();
     Tree resultData;
     
-    assert(watchId != "");
-    
-    
-    QMap <QString, VarWatch>::iterator pos = m_watchList.find(watchId);
-    if(pos == m_watchList.end())
+    assert(getVarWatchInfo(watchId) != NULL);
+
+    // Remove from the list
+    for(int i = 0;i < m_watchList.size();i++)
     {
-        debugMsg("Unable to find watch %s", stringToCStr(watchId));
-        assert(0);
+        VarWatch* watch = m_watchList[i];
+        if(watch->getWatchId() == watchId)
+        {
+            m_watchList.removeAt(i--);
+            delete watch;
+        }
     }
-    else
+
+    // Remove children first
+    QStringList removeList;
+    for(int i = 0;i < m_watchList.size();i++)
     {
-        m_watchList.erase(pos);
-    
-        com.commandF(&resultData, "-var-delete %s", stringToCStr(watchId));
+        VarWatch* childWatch = m_watchList[i];
+        if(childWatch->m_parentWatchId == watchId)
+            removeList.push_back(childWatch->getWatchId());
     }
+    for(int i = 0;i < removeList.size();i++)
+    {
+        gdbRemoveVarWatch(removeList[i]);
+    }
+
+    com.commandF(&resultData, "-var-delete %s", stringToCStr(watchId));
+
+     
 }
 
 
@@ -749,7 +1022,7 @@ void Core::onNotifyAsyncOut(Tree &tree, AsyncClass ac)
     {
         m_scanSources = true;
     }
-    tree.dump();
+    //tree.dump();
 }
 
 
@@ -827,11 +1100,18 @@ void Core::onExecAsyncOut(Tree &tree, AsyncClass ac)
             if(reason == ICore::SIGNAL_RECEIVED)
             {
                 QString signalName = tree.getString("signal-name");
-                if(signalName == "SIGSEGV")
+                if(signalName == "SIGTRAP" && m_isRemote)
                 {
-                    m_targetState = ICore::TARGET_FINISHED;
+                    m_inf->ICore_onStopped(reason, p, lineNo);
                 }
-                m_inf->ICore_onSignalReceived(signalName);  
+                else
+                {
+                    if(signalName == "SIGSEGV")
+                    {
+                        m_targetState = ICore::TARGET_FINISHED;
+                    }
+                    m_inf->ICore_onSignalReceived(signalName);  
+                }
             }
             else
                 m_inf->ICore_onStopped(reason, p, lineNo);
@@ -996,16 +1276,18 @@ void Core::dispatchBreakpointTree(Tree &tree)
 
     
 }
-        
+
+
+
 void Core::onResult(Tree &tree)
 {
          
     debugMsg("Result>");
 
 
-    for(int i = 0;i < tree.getRootChildCount();i++)
+    for(int treeChildIdx = 0;treeChildIdx < tree.getRootChildCount();treeChildIdx++)
     {
-        TreeNode *rootNode = tree.getChildAt(i);
+        TreeNode *rootNode = tree.getChildAt(treeChildIdx);
         QString rootName = rootNode->getName();
         if(rootName == "changelist")
          {
@@ -1015,16 +1297,65 @@ void Core::onResult(Tree &tree)
                 QString path;
                 path.sprintf("changelist/%d/name", j+1);
                 QString watchId = tree.getString(path);
-                path.sprintf("changelist/%d/value", j+1);
-                QString varValue = tree.getString(path);
+                path.sprintf("changelist/%d/type_changed", j+1);
+                bool typeChanged = false;
+                if(tree.getString(path) == "true")
+                    typeChanged = true;
+                
+                VarWatch *watch = getVarWatchInfo(watchId);
 
-                QString varName = gdbGetVarWatchName(watchId);
+                // If the type has changed then all of the children must be removed.
+                if(watch != NULL && typeChanged)
+                {
+                    QString varName = watch->getName();
+
+                    // Remove children
+                    QList <VarWatch*> removeList = getWatchChildren(*watch);
+
+                        
+                    for(int cidx = 0;cidx < removeList.size();cidx++)
+                    {
+                        gdbRemoveVarWatch(removeList[cidx]->getWatchId());
+                    }
+                    watch->setValue("");
+                    path.sprintf("changelist/%d/new_type", j+1);
+                    watch->m_varType = tree.getString(path);
+                    path.sprintf("changelist/%d/new_num_children", j+1);
+                    watch->m_hasChildren = tree.getInt(path) > 0 ? true : false;
+                    m_inf->ICore_onWatchVarChanged(*watch);
+
+                }
+                // value changed?
+                else if(watch)
+                {
                     
-                bool hasChildren = false;
-                if (varValue == "{...}")
-                    hasChildren = true;
-                if(m_inf)
-                    m_inf->ICore_onWatchVarChanged(watchId, varName, varValue, hasChildren);
+                path.sprintf("changelist/%d/value", j+1);
+                watch->setValue(tree.getString(path));
+                path.sprintf("changelist/%d/in_scope", j+1);
+                QString inScopeStr = tree.getString(path);
+                if(inScopeStr == "true" || inScopeStr.isEmpty())
+                    watch->m_inScope = true;
+                else
+                    watch->m_inScope = false;
+
+                
+
+                if (watch->getValue() == "{...}" && watch->hasChildren() == false)
+                    watch->m_hasChildren = true;
+                
+//                printf("in_scope:%s -> %d\n", stringToCStr(inScopeStr), inScope);
+
+                        
+                    if(m_inf)
+                    {
+                        
+                        m_inf->ICore_onWatchVarChanged(*watch);
+                    }
+                }
+                else
+                {
+                    warnMsg("Received watch info for unknown watch %s", stringToCStr(watchId));
+                }
             }
             
         }
@@ -1039,9 +1370,9 @@ void Core::onResult(Tree &tree)
             
             // Parse the result
             QStringList childList = tree.getChildList("threads");
-            for(int i = 0;i < childList.size();i++)
+            for(int cIdx = 0;cIdx < childList.size();cIdx++)
             {
-                QString treePath = "threads/" + childList[i];
+                QString treePath = "threads/" + childList[cIdx];
                 QString threadId = tree.getString(treePath + "/id");
                 QString targetId = tree.getString(treePath + "/target-id");
                 QString funcName = tree.getString(treePath + "/frame/func");
@@ -1127,23 +1458,38 @@ void Core::onResult(Tree &tree)
         // Local variables?
         else if(rootName == "locals")
         {
+            // Clear the local var array
+            for(int j = 0;j < m_localVars.size();j++)
+            {
+                CoreVar *val = m_localVars[j];
+                delete val;
+            }
+            m_localVars.clear();
+                
+            //
+            int cnt = tree.getChildCount("locals");
+            for(int j = 0;j < cnt;j++)
+            {
+                QString path;
+                path.sprintf("locals/%d/name", j+1);
+                QString varName = tree.getString(path);
+                path.sprintf("locals/%d/value", j+1);
+                QString varData = tree.getString(path);
+
+                CoreVar *val = new CoreVar(varName);
+                val->valueFromGdbString(varData);
+
+                m_localVars.push_back(val);
+            }
+
             if(m_inf)
             {
                 m_inf->ICore_onLocalVarReset();
                 
-
-                int cnt = tree.getChildCount("locals");
-                for(int j = 0;j < cnt;j++)
+                for(int j = 0;j < m_localVars.size();j++)
                 {
-                    QString path;
-                    path.sprintf("locals/%d/name", j+1);
-                    QString varName = tree.getString(path);
-                    path.sprintf("locals/%d/value", j+1);
-                    QString varData = tree.getString(path);
-
-                    CoreVarValue val(varData);
-                    m_inf->ICore_onLocalVarChanged(varName, val);
-                    
+                    CoreVar *val = m_localVars[j];
+                    m_inf->ICore_onLocalVarChanged(val);
                 }
             }
         }
@@ -1175,6 +1521,7 @@ void Core::onStatusAsyncOut(Tree &tree, AsyncClass ac)
 
 void Core::onConsoleStreamOutput(QString str)
 {
+    str.replace("\r","");
     QStringList list = str.split('\n');
     for(int i = 0;i < list.size();i++)
     {
@@ -1182,7 +1529,7 @@ void Core::onConsoleStreamOutput(QString str)
         if(text.isEmpty() && i+1 == list.size())
             continue;
             
-        debugMsg("GDB | Console-stream | %s", stringToCStr(text));
+        debugMsg("GDB | Console-stream | '%s'", stringToCStr(text));
 
         if(m_inf)
             m_inf->ICore_onConsoleStream(text);
@@ -1192,6 +1539,7 @@ void Core::onConsoleStreamOutput(QString str)
 
 void Core::onTargetStreamOutput(QString str)
 {
+    str.replace("\r","");
     QStringList list = str.split('\n');
     for(int i = 0;i < list.size();i++)
         infoMsg("GDB | Target-stream | %s", stringToCStr(list[i]));
@@ -1285,8 +1633,50 @@ void Core::selectFrame(int selectedFrameIdx)
 }
 
 
-
+/**
+ * @brief Changes the content of a variable.
+ */
+int Core::changeWatchVariable(QString watchId, QString newValue)
+{
+    QString dataStr;
+    Com& com = Com::getInstance();
+    Tree resultData;
+    int rc = 0;
+    GdbResult gdbRes = GDB_ERROR;
     
+    if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
+    {
+        if(m_inf)
+            m_inf->ICore_onMessage("Program is currently running");
+        return -1;
+    }
+
+    //
+    dataStr = newValue;
+    QString varName = watchId;
+    VarWatch *watch = getVarWatchInfo(watchId);
+    if(watch)
+    {
+        varName = watch->getName();
+        QString varType = watch->getVarType();
+        if(varType == "char" && newValue.length() == 1)
+            dataStr = '\'' + newValue + '\'';
+    }
+
+    gdbRes = com.commandF(&resultData, "-var-assign %s %s", stringToCStr(watchId), stringToCStr(dataStr));    
+    if(gdbRes == GDB_DONE)
+    {
+
+        com.commandF(&resultData, "-var-update --all-values *");
+    }
+    else if(gdbRes == GDB_ERROR)
+    {
+        rc = -1;
+        errorMsg("Failed to change variable %s", stringToCStr(watchId));
+    }
+    return rc;
+}
+
 
 
 

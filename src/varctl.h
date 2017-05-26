@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -25,7 +25,7 @@ public:
 
     enum DispFormat
     {
-        DISP_NATIVE,
+        DISP_NATIVE = 0,
         DISP_DEC,
         DISP_BIN,
         DISP_HEX,
@@ -33,8 +33,6 @@ public:
     };
     typedef struct
     {
-        QString orgValue;
-        DispFormat orgFormat;
         DispFormat dispFormat;
         bool isExpanded;
     }DispInfo;
@@ -42,8 +40,6 @@ public:
     typedef QMap<QString, DispInfo>  DispInfoMap;
 
 
-    static DispFormat findVarType(QString dataString);
-    static QString valueDisplay(long long value, DispFormat format);
 
 };
 

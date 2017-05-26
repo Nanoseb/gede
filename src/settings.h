@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -88,7 +88,29 @@ class Settings
         QColor m_clrNumber;
         QColor m_clrForeground;
        
+        QByteArray m_gui_mainwindowState;
+        QByteArray m_gui_mainwindowGeometry;
+        QByteArray m_gui_splitter1State;
+        QByteArray m_gui_splitter2State;
+        QByteArray m_gui_splitter3State;
+        QByteArray m_gui_splitter4State;
+
+        bool m_viewWindowStack;
+        bool m_viewWindowThreads;
+        bool m_viewWindowBreakpoints;
+        bool m_viewWindowWatch;
+        bool m_viewWindowAutoVariables;
+        bool m_viewWindowTargetOutput;
+        bool m_viewWindowGdbOutput;
+        bool m_viewWindowFileBrowser;
+
+        bool m_tagSortByName;
+        bool m_tagShowLineNumbers;
+
+        bool m_enableDebugLog;
 };
 
+
+ 
 #endif // FILE_SETTINGS_H
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -12,6 +12,7 @@
 #include "tree.h"
 #include <QList>
 #include "com.h"
+#include "core.h"
 
 
 class GdbMiParser
@@ -20,7 +21,7 @@ class GdbMiParser
     
     GdbMiParser(){};
 
-    static int parseVariableData(TreeNode *thisNode, QList<Token*> *tokenList);
+    static int parseVariableData(CoreVar *var, QList<Token*> *tokenList);
     static QList<Token*> tokenizeVarString(QString str);
 
 };

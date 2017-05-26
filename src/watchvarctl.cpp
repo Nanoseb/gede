@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 Johan Henriksson.
+ * Copyright (C) 2014-2017 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
@@ -12,6 +12,33 @@
 #include "util.h"
 #include "core.h"
 
+enum
+{
+    COLUMN_NAME = 0,
+    COLUMN_VALUE = 1,
+    COLUMN_TYPE = 2
+};
+#define DATA_COLUMN         (COLUMN_NAME) 
+
+class AutoSignalBlocker
+{
+public:
+    bool m_signalBlocked;
+    QObject *m_obj;
+    AutoSignalBlocker(QObject *obj)
+        :m_obj(obj)
+    {
+         m_signalBlocked = m_obj->blockSignals(true);
+    };
+    virtual ~AutoSignalBlocker()
+    {
+         m_obj->blockSignals(m_signalBlocked);
+    }
+
+    private:
+        AutoSignalBlocker(){};
+    
+};
 
 WatchVarCtl::WatchVarCtl()
 {
@@ -36,6 +63,10 @@ void WatchVarCtl::setWidget(QTreeWidget *varWidget)
     connect(m_varWidget, SIGNAL(itemExpanded( QTreeWidgetItem * )), this, SLOT(onWatchWidgetItemExpanded(QTreeWidgetItem * )));
     connect(m_varWidget, SIGNAL(itemCollapsed( QTreeWidgetItem *)), this, SLOT(onWatchWidgetItemCollapsed(QTreeWidgetItem *)));
 
+    m_varWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_varWidget, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onContextMenu(const QPoint&)));
+
+
 
     fillInVars();
 
@@ -44,13 +75,157 @@ void WatchVarCtl::setWidget(QTreeWidget *varWidget)
 
 
 
-         
-void WatchVarCtl::ICore_onWatchVarChildAdded(QString watchId, QString name, QString valueString, QString varType, bool hasChildren)
+void WatchVarCtl::ICore_onWatchVarChanged(VarWatch &watch)
 {
     QTreeWidget *varWidget = m_varWidget;
-    QStringList names;
+    Core &core = Core::getInstance();
 
-    Q_UNUSED(name);
+    AutoSignalBlocker autoBlocker(m_varWidget);
+
+    // Find the watch item
+    QStringList watchIdParts = watch.getWatchId().split('.');
+    QTreeWidgetItem* rootItem = varWidget->invisibleRootItem();
+    VarWatch *rootWatch = core.getVarWatchInfo(watchIdParts[0]);
+    assert(rootWatch != NULL);
+
+    // Sync it
+    if(rootWatch)
+        sync(rootItem, *rootWatch);
+}
+
+QString WatchVarCtl::getWatchId(QTreeWidgetItem* item)
+{
+    return item->data(DATA_COLUMN, Qt::UserRole).toString();
+}
+
+
+void WatchVarCtl::sync(QTreeWidgetItem* parentItem, VarWatch &watch)
+{
+    Core &core = Core::getInstance();
+    QString watchId = watch.getWatchId();
+    QString name = watch.getName();
+    QString varType = watch.getVarType();
+    QString valueString = watch.getValue();
+    bool inScope = watch.inScope();
+
+        
+    // Look for the item with the specified watchId
+    QTreeWidgetItem* foundTreeItem = NULL;
+    for(int i = 0;foundTreeItem == NULL && i < parentItem->childCount();i++)
+    {
+        QTreeWidgetItem* treeItem =  parentItem->child(i);
+        QString itemKey = getWatchId(treeItem);
+        if(watchId == itemKey)
+        {
+            foundTreeItem = treeItem;
+        }
+    }
+
+    // Add if we did not find one
+    QTreeWidgetItem *treeItem = foundTreeItem;
+    if(foundTreeItem == NULL)
+    {
+        debugMsg("Adding %s=%s", stringToCStr(name), stringToCStr(valueString));
+
+        // Create the item
+        QStringList nameList;
+        nameList += name;
+        nameList += valueString;
+        nameList += varType;
+        treeItem = new QTreeWidgetItem(nameList);
+        treeItem->setData(DATA_COLUMN, Qt::UserRole, watchId);
+        treeItem->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+        parentItem->addChild(treeItem);
+        
+        if(watch.hasChildren())
+            treeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+    }
+    else
+    {
+        debugMsg("Found %s='%s'", stringToCStr(name), stringToCStr(valueString));
+    }
+
+    // Remove treeitems that does not exist anymore
+    QList <VarWatch*> watchList = core.getWatchChildren(watch);
+    for(int i = 0;i < treeItem->childCount();i++)
+    {
+        QTreeWidgetItem* childTreeItem =  treeItem->child(i);
+        QString childItemKey = getWatchId(childTreeItem);
+        
+        bool found = false;
+        for(int j = 0;j < watchList.size();j++)
+        {
+            VarWatch* watchChild = watchList[j];
+            if(watchChild->getWatchId() == childItemKey)
+            {
+                found = true;
+                watchList.removeAt(j--);
+            }
+        }
+
+        debugMsg("child '%s' %s", stringToCStr(childItemKey), found ? "found" : "not found");
+            
+        if(found == false)
+        {
+            debugMsg("removing watchId:'%s'", stringToCStr(watchId));
+            if(m_watchVarDispInfo.contains(childItemKey))
+            {
+                debugMsg("removing watchId:'%s' from dispinfo", stringToCStr(watchId));
+
+                m_watchVarDispInfo.remove(childItemKey);
+            
+            }
+            treeItem->removeChild(childTreeItem);
+            i = 0;
+        }
+    }
+
+    // Update the text
+    if(!inScope)
+        treeItem->setDisabled(true);
+    else
+        treeItem->setDisabled(false);
+
+    // Add display info
+    if(m_watchVarDispInfo.contains(watchId) == false)
+    {
+        VarCtl::DispInfo dispInfo;
+        dispInfo.dispFormat = DISP_NATIVE;
+        m_watchVarDispInfo[watchId] = dispInfo;
+    }
+
+    valueString = getDisplayString(watchId);
+    treeItem->setText(COLUMN_VALUE, valueString);
+    treeItem->setText(COLUMN_TYPE, varType);
+    if(watch.hasChildren())
+        treeItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    else
+        treeItem->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+
+
+    QList <VarWatch*> watchList2 = core.getWatchChildren(watch);
+    for(int j = 0;j < watchList2.size();j++)
+    {
+        VarWatch* childWatch = watchList2[j];
+        sync(treeItem, *childWatch);
+    }
+}
+
+
+void WatchVarCtl::ICore_onWatchVarChildAdded(VarWatch &watch)
+{
+    Core &core = Core::getInstance();
+    QTreeWidget *varWidget = m_varWidget;
+    QString watchId = watch.getWatchId();
+    QString name = watch.getName();
+    QString varType = watch.getVarType();
+    
+    QString valueString = watch.getValue();
+    bool hasChildren  = watch.hasChildren();
+    bool inScope = watch.inScope();
+
+    AutoSignalBlocker autoBlocker(m_varWidget);
 
     //
     QTreeWidgetItem * rootItem = varWidget->invisibleRootItem();
@@ -68,7 +243,7 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(QString watchId, QString name, QStr
         for(int i = 0;foundItem == NULL && i < rootItem->childCount();i++)
         {
             QTreeWidgetItem* item =  rootItem->child(i);
-            QString itemKey = item->data(0, Qt::UserRole).toString();
+            QString itemKey = item->data(DATA_COLUMN, Qt::UserRole).toString();
 
             if(thisWatchId == itemKey)
             {
@@ -76,7 +251,7 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(QString watchId, QString name, QStr
             }
         }
 
-        // Did not find one
+        // Did not find one?
         QTreeWidgetItem *item;
         if(foundItem == NULL)
         {
@@ -88,8 +263,8 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(QString watchId, QString name, QStr
             nameList += valueString;
             nameList += varType;
             item = new QTreeWidgetItem(nameList);
-            item->setData(0, Qt::UserRole, thisWatchId);
-            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+            item->setData(DATA_COLUMN, Qt::UserRole, thisWatchId);
+            item->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled | Qt::ItemIsSelectable);
             rootItem->addChild(item);
             rootItem = item;
 
@@ -109,35 +284,175 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(QString watchId, QString name, QStr
         if(partIdx+1 == watchIdParts.size())
         {
             // Update the text
-            if(m_watchVarDispInfo.contains(thisWatchId))
+            if(m_watchVarDispInfo.contains(thisWatchId) == false)
             {
-                VarCtl::DispInfo &dispInfo = m_watchVarDispInfo[thisWatchId];
-                dispInfo.orgValue = valueString;
-
-                VarCtl::DispFormat orgFormat = VarCtl::findVarType(valueString);
-
-                dispInfo.orgFormat = orgFormat;
-                
-                // Update the variable value
-                if(orgFormat == VarCtl::DISP_DEC)
-                {
-                    valueString = VarCtl::valueDisplay(valueString.toLongLong(0,0), dispInfo.dispFormat);
-                }
+                VarCtl::DispInfo dispInfo;
+                dispInfo.dispFormat = DISP_NATIVE;
+                m_watchVarDispInfo[watchId] = dispInfo;
             }
-            if(item->childCount() != 0)
+            else
             {
-                if(!hasChildren)
+                valueString = getDisplayString(thisWatchId);
+            }
+
+            bool enable = inScope;
+
+                if(!enable)
                     item->setDisabled(true);
                 else
                     item->setDisabled(false);
                 
 
-            }
-            item->setText(1, valueString);
+            item->setText(COLUMN_VALUE, valueString);
         }
     }
 }
 
+
+
+/**
+ * @brief Returns the value text to show for an item.
+ */
+QString WatchVarCtl::getDisplayString(QString watchId)
+{
+    QString displayValue;
+    Core &core = Core::getInstance();
+    VarWatch *watch = core.getVarWatchInfo(watchId);
+    if(watch)
+    {
+        if(m_watchVarDispInfo.contains(watchId))
+        {
+            VarCtl::DispInfo &dispInfo = m_watchVarDispInfo[watchId];
+
+            switch(dispInfo.dispFormat)
+            {
+                default:
+                case DISP_NATIVE:
+                    displayValue = watch->getValue(CoreVar::FMT_NATIVE);break;
+                case DISP_DEC:
+                    displayValue = watch->getValue(CoreVar::FMT_DEC);break;
+                case DISP_BIN:
+                    displayValue = watch->getValue(CoreVar::FMT_BIN);break;
+                case DISP_HEX:
+                    displayValue = watch->getValue(CoreVar::FMT_HEX);break;
+                case DISP_CHAR:
+                    displayValue = watch->getValue(CoreVar::FMT_CHAR);break;
+            }
+
+        }
+        else
+        {
+            displayValue = watch->getValue(CoreVar::FMT_NATIVE);
+
+            VarCtl::DispInfo dispInfo;
+            dispInfo.dispFormat = DISP_NATIVE;
+            dispInfo.isExpanded = false;
+            m_watchVarDispInfo[watchId] = dispInfo;
+        }
+    }
+    return displayValue;
+}
+
+/**
+ * @brief Change display format for the currently selected items.
+ */
+void WatchVarCtl::selectedChangeDisplayFormat(VarCtl::DispFormat fmt)
+{
+    AutoSignalBlocker autoBlocker(m_varWidget);
+
+        
+
+    // Loop through the selected items.
+    QList<QTreeWidgetItem *> items = m_varWidget->selectedItems();
+    for(int i =0;i < items.size();i++)
+    {
+        QTreeWidgetItem *item = items[i];
+    
+        QString varName = item->text(COLUMN_NAME);
+        QString watchId = item->data(DATA_COLUMN, Qt::UserRole).toString();
+
+        Core &core = Core::getInstance();
+        VarWatch *watch = core.getVarWatchInfo(watchId);
+        
+        if(watch != NULL && m_watchVarDispInfo.contains(watchId))
+        {
+            VarCtl::DispInfo &dispInfo = m_watchVarDispInfo[watchId];
+            {
+                dispInfo.dispFormat = fmt;
+                
+                QString valueText = getDisplayString(watchId);
+
+                item->setText(COLUMN_VALUE, valueText);
+            }
+        }
+        else
+        {
+            debugMsg("Watch with watchId:%s not found", stringToCStr(watchId));
+        }
+    }
+
+}
+
+void WatchVarCtl::onDisplayAsDec()
+{
+    selectedChangeDisplayFormat(VarCtl::DISP_DEC);
+}
+
+void WatchVarCtl::onDisplayAsHex()
+{
+    selectedChangeDisplayFormat(VarCtl::DISP_HEX);
+}
+
+void WatchVarCtl::onDisplayAsBin()
+{
+    selectedChangeDisplayFormat(VarCtl::DISP_BIN);
+}
+
+void WatchVarCtl::onDisplayAsChar()
+{
+    selectedChangeDisplayFormat(VarCtl::DISP_CHAR);
+}
+
+
+void WatchVarCtl::onRemoveWatch()
+{
+    deleteSelected();
+}
+
+
+
+/**
+ * @brief Called when the user right clicks anywhere.
+ */
+void WatchVarCtl::onContextMenu ( const QPoint &pos)
+{
+
+    m_popupMenu.clear();
+
+           
+    // Add menu entries
+    m_popupMenu.addSeparator();
+    
+    QAction *action = m_popupMenu.addAction("Display as dec");
+    action->setData(0);
+    connect(action, SIGNAL(triggered()), this, SLOT(onDisplayAsDec()));
+    action = m_popupMenu.addAction("Display as hex");
+    action->setData(0);
+    connect(action, SIGNAL(triggered()), this, SLOT(onDisplayAsHex()));
+    action = m_popupMenu.addAction("Display as bin");
+    action->setData(0);
+    connect(action, SIGNAL(triggered()), this, SLOT(onDisplayAsBin()));
+    action = m_popupMenu.addAction("Display as char");
+    action->setData(0);
+    connect(action, SIGNAL(triggered()), this, SLOT(onDisplayAsChar()));
+    m_popupMenu.addSeparator();
+    action = m_popupMenu.addAction("Remove watch");
+    action->setData(0);
+    connect(action, SIGNAL(triggered()), this, SLOT(onRemoveWatch()));
+
+        
+    m_popupMenu.popup(m_varWidget->mapToGlobal(pos));
+}
 
 
 void 
@@ -145,17 +460,51 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
 {
     QTreeWidget *varWidget = m_varWidget;
     Core &core = Core::getInstance();
-    QString oldKey = current->data(0, Qt::UserRole).toString();
+    QString oldKey = current->data(DATA_COLUMN, Qt::UserRole).toString();
     QString oldName  = oldKey == "" ? "" : core.gdbGetVarWatchName(oldKey);
-    QString newName = current->text(0);
+    QString newName = current->text(COLUMN_NAME);
 
+    AutoSignalBlocker autoBlocker(m_varWidget);
+
+
+    if(column == COLUMN_VALUE)
+    {
+        VarWatch *watch = NULL;
+        if(newName == "...")
+            current->setText(COLUMN_VALUE, "");
+        else
+        {
+            watch = core.getVarWatchInfo(oldKey);
+            if(watch)
+            {
+                QString oldValue  = watch->getValue();
+                QString newValue = current->text(COLUMN_VALUE);
+
+                if (oldValue != newValue)
+                {
+                    if(core.changeWatchVariable(oldKey, newValue))
+                    {
+                        current->setText(COLUMN_VALUE, oldValue);
+                    }
+                }
+            }
+        }
+    }
+
+    // Only allow changes to 'Value' and 'Name' column
     if(column != 0)
         return;
 
+    // Changed name to the same name?
     if(oldKey != "" && oldName == newName)
         return;
-    
-    debugMsg("oldKey:'%s' oldName:'%s' newName:'%s' ", stringToCStr(oldKey), stringToCStr(oldName), stringToCStr(newName));
+
+    // Only allow name changes on root items
+    if(current->parent() != NULL)
+    {
+        current->setText(COLUMN_NAME, oldName);
+        return;
+    }
 
     if(newName == "...")
         newName = "";
@@ -165,9 +514,9 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
     // Nothing to do?
     if(oldName == "" && newName == "")
     {
-        current->setText(0, "...");
-        current->setText(1, "");
-        current->setText(2, "");
+        current->setText(COLUMN_NAME, "...");
+        current->setText(COLUMN_VALUE, "");
+        current->setText(COLUMN_TYPE, "");
     }
     // Remove a variable?
     else if(newName.isEmpty())
@@ -183,23 +532,26 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
     else if(oldName == "")
     {
         //debugMsg("%s", stringToCStr(current->text(0)));
-        QString value;
-        QString watchId;
-        QString varType;
-        bool hasChildren = false;
-        if(core.gdbAddVarWatch(newName, &varType, &value, &watchId, &hasChildren) == 0)
+        VarWatch *watch = NULL;
+        if(core.gdbAddVarWatch(newName, &watch) == 0)
         {
+            QString watchId = watch->getWatchId();
+            QString varType = watch->getVarType();
+            QString value  = watch->getValue();
+            bool hasChildren = watch->hasChildren();
+
+            
             if(hasChildren)
                 current->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-            current->setData(0, Qt::UserRole, watchId);
-            current->setText(1, value);
-            current->setText(2, varType);
 
             VarCtl::DispInfo dispInfo;
-            dispInfo.orgValue = value;
-            dispInfo.orgFormat = VarCtl::findVarType(value);
-            dispInfo.dispFormat = dispInfo.orgFormat;
+            dispInfo.dispFormat = DISP_NATIVE;
             m_watchVarDispInfo[watchId] = dispInfo;
+
+            current->setData(DATA_COLUMN, Qt::UserRole, watchId);
+            current->setText(COLUMN_VALUE, value);
+            current->setText(COLUMN_TYPE, varType);
+
 
             // Create a new dummy item
             QTreeWidgetItem *item;
@@ -212,9 +564,9 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
         }
         else
         {
-            current->setText(0, "...");
-            current->setText(1, "");
-            current->setText(2, "");
+            current->setText(COLUMN_NAME, "...");
+            current->setText(COLUMN_VALUE, "");
+            current->setText(COLUMN_TYPE, "");
         }
     
     }
@@ -236,15 +588,17 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
 
         m_watchVarDispInfo.remove(oldKey);
 
-        QString value;
-        QString watchId;
-        QString varType;
-        bool hasChildren = false;
-        if(core.gdbAddVarWatch(newName, &varType, &value, &watchId, &hasChildren) == 0)
+        VarWatch *watch = NULL;
+        if(core.gdbAddVarWatch(newName, &watch) == 0)
         {
-            current->setData(0, Qt::UserRole, watchId);
-            current->setText(1, value);
-            current->setText(2, varType);
+            QString watchId = watch->getWatchId();
+            QString varType = watch->getVarType();
+            QString value  = watch->getValue();
+            bool hasChildren = watch->hasChildren();
+
+            current->setData(DATA_COLUMN, Qt::UserRole, watchId);
+            current->setText(COLUMN_VALUE, value);
+            current->setText(COLUMN_TYPE, varType);
 
             if(hasChildren)
             {
@@ -254,9 +608,7 @@ WatchVarCtl::onWatchWidgetCurrentItemChanged( QTreeWidgetItem * current, int col
             
             // Add display information
             VarCtl::DispInfo dispInfo;
-            dispInfo.orgValue = value;
-            dispInfo.orgFormat = VarCtl::findVarType(value);
-            dispInfo.dispFormat = dispInfo.orgFormat;
+            dispInfo.dispFormat = DISP_NATIVE;
             m_watchVarDispInfo[watchId] = dispInfo;
             
         }
@@ -277,7 +629,7 @@ void WatchVarCtl::onWatchWidgetItemExpanded(QTreeWidgetItem *item )
     //QTreeWidget *varWidget = m_varWidget;
 
     // Get watchid of the item
-    QString watchId = item->data(0, Qt::UserRole).toString();
+    QString watchId = item->data(DATA_COLUMN, Qt::UserRole).toString();
 
 
     // Get the children
@@ -299,20 +651,20 @@ void WatchVarCtl::onWatchWidgetItemDoubleClicked(QTreeWidgetItem *item, int colu
     QTreeWidget *varWidget = m_varWidget;
 
     
-    if(column == 0)
+    if(column == COLUMN_NAME || column == COLUMN_VALUE)
         varWidget->editItem(item,column);
-    else if(column == 1)
+    else
     {
-        QString varName = item->text(0);
-        QString watchId = item->data(0, Qt::UserRole).toString();
+        AutoSignalBlocker autoBlocker(m_varWidget);
+
+        QString varName = item->text(COLUMN_NAME);
+        QString watchId = item->data(DATA_COLUMN, Qt::UserRole).toString();
 
         if(m_watchVarDispInfo.contains(watchId))
         {
             VarCtl::DispInfo &dispInfo = m_watchVarDispInfo[watchId];
-            if(dispInfo.orgFormat == VarCtl::DISP_DEC)
             {
-                long long val = dispInfo.orgValue.toLongLong(0,0);
-
+                
                 if(dispInfo.dispFormat == VarCtl::DISP_DEC)
                 {
                     dispInfo.dispFormat = VarCtl::DISP_HEX;
@@ -330,8 +682,8 @@ void WatchVarCtl::onWatchWidgetItemDoubleClicked(QTreeWidgetItem *item, int colu
                     dispInfo.dispFormat = VarCtl::DISP_DEC;
                 }
 
-                QString valueText = VarCtl::valueDisplay(val, dispInfo.dispFormat);
-
+                QString valueText = getDisplayString(watchId);
+                
                 item->setText(1, valueText);
             }
         }
@@ -369,7 +721,7 @@ void WatchVarCtl::addNewWatch(QString varName)
     // Add the new variable to the watch list
     QTreeWidgetItem* rootItem = m_varWidget->invisibleRootItem();
     QTreeWidgetItem* lastItem = rootItem->child(rootItem->childCount()-1);
-    lastItem->setText(0, varName);
+    lastItem->setText(COLUMN_NAME, varName);
 
 }
 
@@ -399,7 +751,7 @@ void WatchVarCtl::deleteSelected()
     
         // Delete the item
         Core &core = Core::getInstance();
-        QString watchId = item->data(0, Qt::UserRole).toString();
+        QString watchId = item->data(DATA_COLUMN, Qt::UserRole).toString();
         if(watchId != "")
         {
             rootItem->removeChild(item);
@@ -409,6 +761,27 @@ void WatchVarCtl::deleteSelected()
 
 }
 
+void WatchVarCtl::onKeyPress(QKeyEvent *keyEvent)
+{
+    if(keyEvent->key() == Qt::Key_Delete)
+    {
+        deleteSelected();
+    }
+    else if(keyEvent->key() == Qt::Key_Return)
+    {
+        // Get the active unit
+        QTreeWidgetItem * item = m_varWidget->currentItem();
+        if(item)
+        {
+            if(item->text(COLUMN_NAME) == "...")
+                m_varWidget->editItem(item,COLUMN_NAME);
+            else
+                m_varWidget->editItem(item,COLUMN_VALUE);
+            
+        }   
+    }
+
+}
     
 
     
