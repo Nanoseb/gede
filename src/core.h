@@ -20,6 +20,8 @@
 
 #include "settings.h"
 
+class Core;
+
 struct ThreadInfo
 {
     int id;             //!< The numeric id assigned to the thread by GDB.
@@ -76,21 +78,22 @@ public:
     CoreVar(QString name);
     virtual ~CoreVar();
 
-    typedef enum { FMT_HEX, FMT_DEC, FMT_BIN, FMT_CHAR, FMT_NATIVE } DispFormat;
+    typedef enum { FMT_HEX = 1, FMT_DEC, FMT_BIN, FMT_CHAR, FMT_NATIVE } DispFormat;
 
     QString getName() const { return m_name; };
     QString getData(DispFormat fmt) const;
-    
+
+    void setVarType(QString varType) { m_varType = varType; };
+    QString getVarType() { return m_varType; };
     void setData(QString data);
     long long getAddress();
     void setAddress(long long addr) { m_address = addr; };
 
-    int getChildCount() { return m_children.size(); };
-    CoreVar* getChild(int idx) { return m_children[idx]; };
-    CoreVar* addChild(QString name);
+
+    bool hasChildren() { return m_hasChildren; };
     
     void valueFromGdbString(QString data);
-    
+
 private:
     void clear();
 
@@ -98,11 +101,11 @@ private:
 private:
 
     QString m_name;
-    QVector <CoreVar*> m_children;
     QVariant m_data;
     long long m_address;
-    enum { TYPE_INT = 0, TYPE_FLOAT, TYPE_STRING, TYPE_ERROR_MSG, TYPE_CHAR, TYPE_UNKNOWN } m_type;
-
+    enum { TYPE_HEX_INT = 1, TYPE_DEC_INT, TYPE_FLOAT, TYPE_STRING, TYPE_ENUM, TYPE_ERROR_MSG, TYPE_CHAR, TYPE_UNKNOWN } m_type;
+    QString m_varType;
+    bool m_hasChildren;
 };
 
 
@@ -121,20 +124,20 @@ class VarWatch
         QString getValue(CoreVar::DispFormat fmt = CoreVar::FMT_NATIVE) { return m_var.getData(fmt); };
 
         void setValue(QString value);
+        long long getAddress() { return m_var.getAddress(); };
+    
     private:
 
         QString watchId;
         QString name;
-
-    public:
         bool m_inScope;
-    private:
         CoreVar m_var;
-    public:
         QString m_varType;
         bool m_hasChildren;
         
         QString m_parentWatchId;
+
+    friend Core;
 };
 
 
@@ -172,8 +175,7 @@ class ICore
     virtual void ICore_onStopped(StopReason reason, QString path, int lineNo) = 0;
     virtual void ICore_onStateChanged(TargetState state) = 0;
     virtual void ICore_onSignalReceived(QString signalName) = 0;
-    virtual void ICore_onLocalVarReset() = 0;
-    virtual void ICore_onLocalVarChanged(CoreVar* value) = 0;
+    virtual void ICore_onLocalVarChanged(QStringList varNames) = 0;
     virtual void ICore_onFrameVarReset() = 0;
     virtual void ICore_onFrameVarChanged(QString name, QString value) = 0;
     virtual void ICore_onWatchVarChanged(VarWatch &watch) = 0;
@@ -248,7 +250,7 @@ public:
 
     int changeWatchVariable(QString variable, QString newValue);
     
-    QVector <CoreVar*>& getLocalVars() { return m_localVars; };
+    QStringList getLocalVars() { return m_localVars; };
 
 
     int gdbSetBreakpoint(QString filename, int lineNo);
@@ -300,7 +302,7 @@ private:
     bool m_scanSources; //!< True if the source filelist may have changed
     QSocketNotifier  *m_ptsListener;
 
-    QVector <CoreVar*> m_localVars;
+    QStringList m_localVars;
     int m_memDepth; //!< The memory depth. (Either 64 or 32).
 };
 

@@ -11,6 +11,7 @@
 #include "log.h"
 #include "util.h"
 #include "core.h"
+#include "autosignalblocker.h"
 
 enum
 {
@@ -19,26 +20,6 @@ enum
     COLUMN_TYPE = 2
 };
 #define DATA_COLUMN         (COLUMN_NAME) 
-
-class AutoSignalBlocker
-{
-public:
-    bool m_signalBlocked;
-    QObject *m_obj;
-    AutoSignalBlocker(QObject *obj)
-        :m_obj(obj)
-    {
-         m_signalBlocked = m_obj->blockSignals(true);
-    };
-    virtual ~AutoSignalBlocker()
-    {
-         m_obj->blockSignals(m_signalBlocked);
-    }
-
-    private:
-        AutoSignalBlocker(){};
-    
-};
 
 WatchVarCtl::WatchVarCtl()
 {
@@ -84,13 +65,20 @@ void WatchVarCtl::ICore_onWatchVarChanged(VarWatch &watch)
 
     // Find the watch item
     QStringList watchIdParts = watch.getWatchId().split('.');
-    QTreeWidgetItem* rootItem = varWidget->invisibleRootItem();
     VarWatch *rootWatch = core.getVarWatchInfo(watchIdParts[0]);
     assert(rootWatch != NULL);
-
+    // Do we own this watch?
+    if(!m_watchVarDispInfo.contains(watchIdParts[0]))
+    {
+        return;
+    }
+ 
     // Sync it
     if(rootWatch)
+    {
+        QTreeWidgetItem* rootItem = varWidget->invisibleRootItem();
         sync(rootItem, *rootWatch);
+    }
 }
 
 QString WatchVarCtl::getWatchId(QTreeWidgetItem* item)
@@ -227,9 +215,15 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(VarWatch &watch)
 
     AutoSignalBlocker autoBlocker(m_varWidget);
 
+    // Do we own this watch?
+    QStringList watchIdParts = watchId.split('.');
+    if(!m_watchVarDispInfo.contains(watchIdParts[0]))
+    {
+        return;
+    }
+
     //
     QTreeWidgetItem * rootItem = varWidget->invisibleRootItem();
-    QStringList watchIdParts = watchId.split('.');
     QString thisWatchId;
     for(int partIdx = 0; partIdx < watchIdParts.size();partIdx++)
     {
@@ -251,6 +245,12 @@ void WatchVarCtl::ICore_onWatchVarChildAdded(VarWatch &watch)
             }
         }
 
+        // This watch belonged to the AutoWidget?
+        if(partIdx == 0 && foundItem == NULL)
+        {
+            return;
+        }
+        
         // Did not find one?
         QTreeWidgetItem *item;
         if(foundItem == NULL)

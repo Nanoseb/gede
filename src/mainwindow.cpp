@@ -42,12 +42,15 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     //
-    m_ui.treeWidget_breakpoints->setColumnCount(2);
-    m_ui.treeWidget_breakpoints->setColumnWidth(0, 80);
+    m_ui.treeWidget_breakpoints->setColumnCount(4);
+    m_ui.treeWidget_breakpoints->setColumnWidth(0, 120);
+    m_ui.treeWidget_breakpoints->setColumnWidth(1, 40);
+    m_ui.treeWidget_breakpoints->setColumnWidth(2, 200);
+    m_ui.treeWidget_breakpoints->setColumnWidth(3, 140);
     names.clear();
     names += "Filename";
-    names += "Func";
     names += "Line";
+    names += "Func";
     names += "Addr";
     m_ui.treeWidget_breakpoints->setHeaderLabels(names);
     connect(m_ui.treeWidget_breakpoints, SIGNAL(itemDoubleClicked ( QTreeWidgetItem * , int  )), this, SLOT(onBreakpointsWidgetItemDoubleClicked(QTreeWidgetItem * ,int)));
@@ -427,10 +430,6 @@ void MainWindow::ICore_onStopped(ICore::StopReason reason, QString path, int lin
 }
 
 
-void MainWindow::ICore_onLocalVarReset()
-{
-    m_autoVarCtl.ICore_onLocalVarReset();
-}
 
 /**
  * @brief Finds a child to a treewidget node.
@@ -647,14 +646,9 @@ void MainWindow::insertSourceFiles()
 
 
 
-
-
-
-    
-    
-void MainWindow::ICore_onLocalVarChanged(CoreVar *varValue)
+void MainWindow::ICore_onLocalVarChanged(QStringList varNames)
 {
-    m_autoVarCtl.ICore_onLocalVarChanged(varValue);
+    m_autoVarCtl.ICore_onLocalVarChanged(varNames);
 }
 
 
@@ -662,6 +656,7 @@ void MainWindow::ICore_onLocalVarChanged(CoreVar *varValue)
 void MainWindow::ICore_onWatchVarChanged(VarWatch &watch)
 {
     m_watchVarCtl.ICore_onWatchVarChanged(watch);
+    m_autoVarCtl.ICore_onWatchVarChanged(watch);
     
 }
 
@@ -669,6 +664,7 @@ void MainWindow::ICore_onWatchVarChanged(VarWatch &watch)
 void MainWindow::ICore_onWatchVarChildAdded(VarWatch &watch)
 {
     m_watchVarCtl.ICore_onWatchVarChildAdded(watch);
+    m_autoVarCtl.ICore_onWatchVarChildAdded(watch);
 }
 
 
@@ -1051,9 +1047,9 @@ void MainWindow::ICore_onBreakpointsChanged()
         QStringList nameList;
         QString name;
         nameList.append(getFilenamePart(bk->fullname));
-        nameList.append(bk->m_funcName);
         name.sprintf("%d", bk->lineNo);
         nameList.append(name);
+        nameList.append(bk->m_funcName);
         nameList.append(longLongToHexString(bk->m_addr));
         
         
@@ -1551,8 +1547,8 @@ void MainWindow::ICore_onStateChanged(TargetState state)
     if(state == TARGET_STARTING || state == TARGET_RUNNING)
     {
         m_ui.treeWidget_stack->clear();
-        m_ui.autoWidget->clear();
     }
+    m_autoVarCtl.ICore_onStateChanged(state);
 }
 
 
