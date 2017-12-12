@@ -27,7 +27,7 @@ struct ThreadInfo
     int id;             //!< The numeric id assigned to the thread by GDB.
     QString m_name;     //!< Target-specific string identifying the thread.
 
-    QString m_func; 
+    QString m_func; //!< The name of the function (Eg: "func"). 
     QString m_details;  //!< Additional information about the thread provided by the target.
 };
 
@@ -36,8 +36,8 @@ struct StackFrameEntry
 {
     public:
         QString m_functionName; //!< Eg: "main".
-        int m_line; //!< Eg: 1.
-        QString m_sourcePath; //!< Eg: "/test/file.c".
+        int m_line; //!< The line number. Eg: 1.
+        QString m_sourcePath; //!< The full path of the source file. Eg: "/test/file.c".
 };
 
 
@@ -218,6 +218,7 @@ public:
 
     static Core& getInstance();
     int initLocal(Settings *cfg, QString gdbPath, QString programPath, QStringList argumentList);
+    int initCoreDump(Settings *cfg, QString gdbPath, QString programPath, QString coreDumpFile);
     int initRemote(Settings *cfg, QString gdbPath, QString programPath, QString tcpHost, int tcpPort);
     
     void setListener(ICore *inf) { m_inf = inf; };

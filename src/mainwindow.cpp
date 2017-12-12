@@ -186,6 +186,9 @@ MainWindow::~MainWindow()
 }
 
 
+/**
+ * @brief Displays all the widgets (Eg: stack, breakpoints).
+ */
 void MainWindow::showWidgets()
 {
 
@@ -792,6 +795,9 @@ void MainWindow::onCodeViewTab_tabCloseRequested ( int tabIdx)
 }
 
 
+/**
+ * @brief Opens a source file in the sourcecode viewer.
+ */
 CodeViewTab* MainWindow::open(QString filename)
 {
     if(filename.isEmpty())
@@ -1588,6 +1594,10 @@ void MainWindow::setStatusLine(Settings &cfg)
             argumentText += "...";
         }
         statusText.sprintf("[%s] [%s]", stringToCStr(cfg.m_lastProgram), stringToCStr(argumentText));
+    }
+    else if(cfg.m_connectionMode == MODE_COREDUMP)
+    {
+        statusText.sprintf("[%s] [%s]", stringToCStr(cfg.m_coreDumpProgram), stringToCStr(cfg.m_coreDumpFile));
     }
     else
         statusText.sprintf("[%s] [%s:%d]", stringToCStr(cfg.m_tcpProgram), stringToCStr(cfg.m_tcpHost), (int)cfg.m_tcpPort);

@@ -29,6 +29,12 @@ public:
     QString getProgram();
     QString getArguments();
 
+    QString getCoreDumpFile();
+    QString getCoreDumpProgram();
+
+    void setCoreDumpProgram(QString coreProgram);
+    void setCoreDumpFile(QString coreDumpFile);
+
     void setInitialBreakpoint(QString list);
     QString getInitialBreakpoint();
     
@@ -64,9 +70,13 @@ private:
 private slots:
     void onConnectionTypeLocal(bool checked);
     void onConnectionTypeTcp(bool checked);
+    void onConnectionTypeCoreDump(bool checked);
     
     void onSelectTcpProgram();
     void onSelectProgram();
+    void onSelectCoreProgram();
+    void onSelectCoreFile();
+    
 
 private:
     Ui_OpenDialog m_ui;

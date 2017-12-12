@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Written by Johan Henriksson. Copyright (C) 2014.
+# Written by Johan Henriksson. Copyright (C) 2014-2017.
 #
 import sys
 import os
@@ -37,6 +37,44 @@ def dump_usage():
     return 1
 
 
+def exeExist(name):
+    pathEnv = os.environ["PATH"]
+    for path in pathEnv.split(":"):
+        if os.path.isfile(path + "/" + name):
+            return path
+    return ""
+
+def printRed(textString):
+    """ Print in red text """
+    CSI="\x1B["
+    print(CSI+"1;31;40m" + textString + CSI + "0m")
+        
+def ensureExist(name):
+    """ Checks if an executable exist in the PATH. """
+    sys.stdout.write("Checking for " + name + "... "),
+    foundPath = exeExist(name)
+    if foundPath:
+        print(" found in " + foundPath)
+    else:
+        printRed(" not found!!")
+
+def detectQt():
+    """ @brief Detects the Qt version installed in the system.
+        @return The name of the qmake executable. 
+    """
+    sys.stdout.write("Detecting Qt version... "),
+    if exeExist("qmake-qt4"):
+        print("Qt4 found");
+        return "qmake-qt4";
+    elif exeExist("qmake-qt5"):
+        print("Qt5 found");
+        return "qmake-qt5";
+    elif exeExist("qmake"):
+        print("Qt? found (qmake)");
+        return "qmake";
+    print("No Qt found");
+    return "qmake";
+
 
 # Main entry
 if __name__ == "__main__":
@@ -45,6 +83,7 @@ if __name__ == "__main__":
         do_clean = False
         do_install = False
         do_build = True
+        
         for arg in sys.argv[1:]:
             if arg == "clean":
                 do_build = False
@@ -70,10 +109,13 @@ if __name__ == "__main__":
                 os.system("rm -f *.o")
         if do_build:
             if not os.path.exists("Makefile"):
+                ensureExist("make")
+                ensureExist("gcc")
+                ensureExist("ctags")
+                qmakeName = detectQt();
                 print("Generating makefile")
-                if subprocess.call(['qmake-qt4']):
+                if subprocess.call([qmakeName]):
                     exit(1)
-
             print("Compiling (please wait)")
             if run_make([]):
                 exit(1)
@@ -88,7 +130,7 @@ if __name__ == "__main__":
                 exit(1)
             try:
                 shutil.copyfile("gede", g_dest_path + "/bin/gede")
-                os.chmod(g_dest_path + "/bin/gede", 0775);
+                os.chmod(g_dest_path + "/bin/gede", 0o775);
             except:
                 print("Failed to install files to " + g_dest_path)
                 raise
