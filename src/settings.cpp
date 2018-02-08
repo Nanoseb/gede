@@ -13,7 +13,6 @@
 #include "config.h"
 
 #include <QDir>
-#include <QStyleFactory>
 
 
 
@@ -36,11 +35,12 @@ Settings::Settings()
     DistroType distroType = DISTRO_UNKNOWN;
     detectDistro(&distroType, NULL);
     if(distroType == DISTRO_DEBIAN)
-        m_guiStyleName = "Cleanlooks";
+        m_guiStyleName = "cleanlooks";
     else
         m_guiStyleName = "";
     
 
+    m_currentLineStyle = FILLED_RECT;
     
 }
 
@@ -62,6 +62,7 @@ void Settings::loadDefaultsGui()
     m_clrIncString = QColor(0,125, 250);
     m_clrKeyword = Qt::yellow;
     m_clrCppKeyword = QColor(240,110,110);
+    m_clrCurrentLine = QColor(100,0,0);
     m_clrNumber = Qt::magenta;
     m_clrForeground = Qt::white;
 
@@ -69,6 +70,8 @@ void Settings::loadDefaultsGui()
     m_tagShowLineNumbers = true;
 
     m_tabIndentCount = 4;
+
+    m_currentLineStyle = FILLED_RECT;
 }
 
 void Settings::loadDefaultsAdvanced()
@@ -100,17 +103,15 @@ void Settings::loadGlobalConfig()
     loadDefaultsAdvanced();
 
     m_enableDebugLog = tmpIni.getBool("General/EnableDebugLog", false);
+
+    switch(tmpIni.getInt("Gui/CurrentLineStyle", m_currentLineStyle))
+    {
+        case HOLLOW_RECT: m_currentLineStyle = HOLLOW_RECT;break;
+        default:
+        case FILLED_RECT: m_currentLineStyle = FILLED_RECT;break;
+    };
     
     m_guiStyleName = tmpIni.getString("Gui/Style", m_guiStyleName);
-    // Verify that the style name is valid
-    QStyleFactory sf;
-    QStringList styleList = sf.keys();
-    if(!styleList.contains(m_guiStyleName) && !m_guiStyleName.isEmpty())
-    {
-        warnMsg("Invalid style name '%s'", stringToCStr(m_guiStyleName));
-        m_guiStyleName = "";
-    }
-       
     m_fontFamily = tmpIni.getString("Gui/CodeFont", m_fontFamily);
     m_fontSize = tmpIni.getInt("Gui/CodeFontSize", m_fontSize);
     m_memoryFontFamily = tmpIni.getString("Gui/MemoryFont", m_memoryFontFamily);
@@ -150,6 +151,7 @@ void Settings::loadGlobalConfig()
     m_clrIncString = tmpIni.getColor("GuiColor/ColorIncString", QColor(0,125, 250));
     m_clrKeyword = tmpIni.getColor("GuiColor/ColorKeyword", Qt::yellow);
     m_clrCppKeyword = tmpIni.getColor("GuiColor/ColorCppKeyword", QColor(240,110,110));
+    m_clrCurrentLine= tmpIni.getColor("GuiColor/ColorCurrentLine", m_clrCurrentLine);
     m_clrNumber = tmpIni.getColor("GuiColor/ColorNumber", Qt::magenta);
     m_clrForeground = tmpIni.getColor("GuiColor/ColorForeGround", Qt::white);
 
@@ -282,6 +284,8 @@ void Settings::saveGlobalConfig()
 
     tmpIni.setBool("General/EnableDebugLog", m_enableDebugLog);
 
+    tmpIni.setInt("Gui/CurrentLineStyle", m_currentLineStyle);
+    
     tmpIni.setString("Gui/Style", m_guiStyleName);
  
     tmpIni.setString("Gui/CodeFont", m_fontFamily);
@@ -325,6 +329,7 @@ void Settings::saveGlobalConfig()
     tmpIni.setColor("GuiColor/ColorIncString", m_clrIncString);
     tmpIni.setColor("GuiColor/ColorKeyword", m_clrKeyword);
     tmpIni.setColor("GuiColor/ColorCppKeyword", m_clrCppKeyword);
+    tmpIni.setColor("GuiColor/ColorCurrentLine", m_clrCurrentLine);
     tmpIni.setColor("GuiColor/ColorNumber", m_clrNumber);
     tmpIni.setColor("GuiColor/ColorForeGround", m_clrForeground);
 
@@ -348,14 +353,10 @@ QStringList Settings::getDefaultCppKeywordList()
     keywordList += "endif";
     keywordList += "ifndef";
     keywordList += "include";
-    keywordList += "error";
-    keywordList += "elif";
-    keywordList += "warning";
-
     return keywordList;
 }
 
-QStringList Settings::getDefaultKeywordList()
+QStringList Settings::getDefaultCxxKeywordList()
 {
     QStringList keywordList;
     keywordList += "if";
@@ -398,6 +399,49 @@ QStringList Settings::getDefaultKeywordList()
     keywordList += "int16_t";
     keywordList += "int8_t";
     
+    return keywordList;
+}
+
+
+QStringList Settings::getDefaultBasicKeywordList()
+{
+    QStringList keywordList;
+
+    keywordList += "print";
+    keywordList += "sleep";
+    keywordList += "return";
+
+    keywordList += "do";
+    keywordList += "loop";
+    keywordList += "until";
+    keywordList += "declare";
+
+    keywordList += "cls";
+    keywordList += "function";
+    keywordList += "sub";
+    keywordList += "as";
+    keywordList += "end";
+    keywordList += "dim";
+    
+    keywordList += "byte";
+    keywordList += "const";
+    keywordList += "double";
+    keywordList += "enum";
+    keywordList += "integer";
+    keywordList += "long";
+    keywordList += "longint";
+    keywordList += "short";
+    keywordList += "string";
+    keywordList += "ubyte";
+    keywordList += "uinteger";
+    keywordList += "ulongint";
+    keywordList += "union";
+    keywordList += "unsigned";
+    keywordList += "ushort";
+    keywordList += "wstring";
+    keywordList += "zstring";
+
+
     return keywordList;
 }
 

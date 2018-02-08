@@ -6,10 +6,6 @@
   	//nisse
 
 
-void long_func_with_many_arguments(int a_very_long_function_variable_name_xxxxxxx, int another_very_long_variable_name___, int another_another_very_long_variable_name___, int another_another_very_long_variable_name___2)
-{
-}
-
 void func()
 {
     volatile int a = 1;
