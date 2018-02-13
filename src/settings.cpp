@@ -13,6 +13,7 @@
 #include "config.h"
 
 #include <QDir>
+#include <QStyleFactory>
 
 
 
@@ -35,7 +36,7 @@ Settings::Settings()
     DistroType distroType = DISTRO_UNKNOWN;
     detectDistro(&distroType, NULL);
     if(distroType == DISTRO_DEBIAN)
-        m_guiStyleName = "cleanlooks";
+        m_guiStyleName = "Cleanlooks";
     else
         m_guiStyleName = "";
     
@@ -72,6 +73,8 @@ void Settings::loadDefaultsGui()
     m_tabIndentCount = 4;
 
     m_currentLineStyle = FILLED_RECT;
+    m_showLineNo = true;
+    
 }
 
 void Settings::loadDefaultsAdvanced()
@@ -110,8 +113,18 @@ void Settings::loadGlobalConfig()
         default:
         case FILLED_RECT: m_currentLineStyle = FILLED_RECT;break;
     };
-    
+
+    m_showLineNo = tmpIni.getBool("Gui/ShowLineNo", m_showLineNo);
     m_guiStyleName = tmpIni.getString("Gui/Style", m_guiStyleName);
+    // Verify that the style name is valid
+    QStyleFactory sf;
+    QStringList styleList = sf.keys();
+    if(!styleList.contains(m_guiStyleName) && !m_guiStyleName.isEmpty())
+    {
+        warnMsg("Invalid style name '%s'", stringToCStr(m_guiStyleName));
+        m_guiStyleName = "";
+    }
+       
     m_fontFamily = tmpIni.getString("Gui/CodeFont", m_fontFamily);
     m_fontSize = tmpIni.getInt("Gui/CodeFontSize", m_fontSize);
     m_memoryFontFamily = tmpIni.getString("Gui/MemoryFont", m_memoryFontFamily);
@@ -285,6 +298,8 @@ void Settings::saveGlobalConfig()
     tmpIni.setBool("General/EnableDebugLog", m_enableDebugLog);
 
     tmpIni.setInt("Gui/CurrentLineStyle", m_currentLineStyle);
+
+    tmpIni.setBool("Gui/ShowLineNo", m_showLineNo);
     
     tmpIni.setString("Gui/Style", m_guiStyleName);
  
@@ -353,6 +368,10 @@ QStringList Settings::getDefaultCppKeywordList()
     keywordList += "endif";
     keywordList += "ifndef";
     keywordList += "include";
+    keywordList += "error";
+    keywordList += "elif";
+    keywordList += "warning";
+
     return keywordList;
 }
 
