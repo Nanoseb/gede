@@ -1,12 +1,13 @@
 /*
- * Copyright (C) 2014-2018 Johan Henriksson.
+ * Copyright (C) 2018 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
  * of the BSD license.  See the LICENSE file for details.
  */
 
-#include "syntaxhighlighterbasic.h"
+
+#include "syntaxhighlighterrust.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -15,8 +16,7 @@
 #include "settings.h"
 
 
-SyntaxHighlighterBasic::Row::Row()
-    : isCppRow(0)
+SyntaxHighlighterRust::Row::Row()
 {
 };
 
@@ -24,7 +24,7 @@ SyntaxHighlighterBasic::Row::Row()
 /**
  * @brief Returns the last nonspace field in the row.
  */
-TextField *SyntaxHighlighterBasic::Row::getLastNonSpaceField()
+TextField *SyntaxHighlighterRust::Row::getLastNonSpaceField()
 {
     for(int j = m_fields.size()-1;j >= 0;j--)
     {
@@ -39,7 +39,7 @@ TextField *SyntaxHighlighterBasic::Row::getLastNonSpaceField()
 }
 
 
-int SyntaxHighlighterBasic::Row::getCharCount()
+int SyntaxHighlighterRust::Row::getCharCount()
 {
     int len = 0;
     for(int j = m_fields.size()-1;j >= 0;j--)
@@ -52,17 +52,17 @@ int SyntaxHighlighterBasic::Row::getCharCount()
 }
 
         
-void SyntaxHighlighterBasic::Row::appendField(TextField* field)
+void SyntaxHighlighterRust::Row::appendField(TextField* field)
 {
     m_fields.push_back(field);
 }
 
 
-SyntaxHighlighterBasic::SyntaxHighlighterBasic()
+SyntaxHighlighterRust::SyntaxHighlighterRust()
     : m_cfg(NULL)
 
 {
-    QStringList keywordList = Settings::getDefaultBasicKeywordList();
+    QStringList keywordList = Settings::getDefaultRustKeywordList();
     for(int u = 0;u < keywordList.size();u++)
     {
         m_keywords[keywordList[u]] = true;
@@ -77,13 +77,13 @@ SyntaxHighlighterBasic::SyntaxHighlighterBasic()
 
 }
 
-SyntaxHighlighterBasic::~SyntaxHighlighterBasic()
+SyntaxHighlighterRust::~SyntaxHighlighterRust()
 {
     reset();
 }
 
 
-bool SyntaxHighlighterBasic::isSpecialChar(char c) const
+bool SyntaxHighlighterRust::isSpecialChar(char c) const
 {
     if(             c == '\t' ||
                     c == ',' ||
@@ -103,7 +103,7 @@ bool SyntaxHighlighterBasic::isSpecialChar(char c) const
         return false;
 }
 
-bool SyntaxHighlighterBasic::isSpecialChar(TextField *field) const
+bool SyntaxHighlighterRust::isSpecialChar(TextField *field) const
 {
     if(field->m_text.size() == 1)
     {
@@ -114,9 +114,9 @@ bool SyntaxHighlighterBasic::isSpecialChar(TextField *field) const
 
 
 
-bool SyntaxHighlighterBasic::isKeyword(QString text) const
+
+bool SyntaxHighlighterRust::isKeyword(QString text) const
 {
-    text = text.toLower();
     if(text.size() == 0)
         return false;
     if(m_keywords.contains(text))
@@ -129,7 +129,7 @@ bool SyntaxHighlighterBasic::isKeyword(QString text) const
     }
 }
 
-void SyntaxHighlighterBasic::pickColor(TextField *field)
+void SyntaxHighlighterRust::pickColor(TextField *field)
 {
     assert(field != NULL);
     assert(m_cfg != NULL);
@@ -156,7 +156,7 @@ void SyntaxHighlighterBasic::pickColor(TextField *field)
 }
 
 
-void SyntaxHighlighterBasic::reset()
+void SyntaxHighlighterRust::reset()
 {
     for(int r = 0;r < m_rows.size();r++)
     {
@@ -172,20 +172,20 @@ void SyntaxHighlighterBasic::reset()
     m_rows.clear();
 }
 
-void SyntaxHighlighterBasic::setConfig(Settings *cfg)
+void SyntaxHighlighterRust::setConfig(Settings *cfg)
 {
     m_cfg = cfg;
 
 }
 
-void SyntaxHighlighterBasic::colorize(QString text)
+void SyntaxHighlighterRust::colorize(QString text)
 {
     Row *currentRow;
     TextField *field = NULL;
     enum {IDLE,
         MULTI_COMMENT,
         SPACES,
-        WORD, COMMENT1,COMMENT,
+        WORD, GLOBAL_INCLUDE_FILE, COMMENT1,COMMENT,
         STRING,
         ESCAPED_CHAR,
         INC_STRING
@@ -227,15 +227,6 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     currentRow->appendField(field);
                     field->m_text = c;
                 }
-                else if(c == '\'')
-                {
-                    field = new TextField;
-                    field->m_text = c;
-                    field->m_type = TextField::COMMENT;
-                    field->m_color = Qt::green;
-                    currentRow->appendField(field);
-                    state = COMMENT;
-                }
                 else if(c == ' ' || c == '\t')
                 {
                     state = SPACES;
@@ -263,63 +254,23 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 {
                     state = STRING;
                     field = new TextField;
-                    if(currentRow->isCppRow)
-                        field->m_type = TextField::INC_STRING;
-                    else
-                        field->m_type = TextField::STRING;
+                    field->m_type = TextField::STRING;
                     currentRow->appendField(field);
                     field->m_text = c;
                 }
-                else if(c == '<' && currentRow->isCppRow)
+                // An '->' token?
+                else if(c == '>' && field != NULL)
                 {
-                    // Is it a include string?
-                    bool isIncString = false;
-                    TextField *lastField = currentRow->getLastNonSpaceField();
-                    if(lastField)
-                    {
-                        if(lastField->m_text.compare("include",Qt::CaseInsensitive) == 0)
-                            isIncString = true;
-                    }
-
-                    // Add the field
-                    field = new TextField;
-                    field->m_text = c;
-                    if(isIncString)
-                    {
-                        state = INC_STRING;
-                        field->m_type = TextField::INC_STRING;
-                    }
+                    if(field->m_text == "-")
+                        field->m_text += ">";
                     else
                     {
+                        field = new TextField;
                         field->m_type = TextField::WORD;
                         field->m_color = Qt::white;
+                        currentRow->appendField(field);
+                        field->m_text = c;
                     }
-                    currentRow->appendField(field);
-                
-                }
-                else if(c == '#')
-                {
-                    // Only spaces before the '#' at the line?
-                    bool onlySpaces = true;
-                    for(int j = 0;onlySpaces == true && j < currentRow->m_fields.size();j++)
-                    {
-                        if(currentRow->m_fields[j]->m_type != TextField::SPACES &&
-                            currentRow->m_fields[j]->m_type != TextField::COMMENT)
-                        {
-                            onlySpaces = false;
-                        }
-                    }
-                    currentRow->isCppRow = onlySpaces ? true : false;
-
-                    // Create a new field structure
-                    field = new TextField;
-                    if(currentRow->isCppRow)
-                        field->m_type = TextField::CPP_KEYWORD;
-                    else
-                        field->m_type = TextField::WORD;
-                    field->m_color = Qt::white;
-                    currentRow->appendField(field);
-                    field->m_text = c;
                 }
                 else if(isSpecialChar(c))
                 {
@@ -350,13 +301,20 @@ void SyntaxHighlighterBasic::colorize(QString text)
             };break;
             case COMMENT1:
             {
-                if(c == '\'')
+                if(c == '*')
                 {
                     field->m_text += c;
                     field->m_type = TextField::COMMENT;
                     field->m_color = Qt::green;
                     state = MULTI_COMMENT;
                     
+                }
+                else if(c == '/')
+                {
+                    field->m_text += c;
+                    field->m_type = TextField::COMMENT;
+                    field->m_color = Qt::green;
+                    state = COMMENT;
                 }
                 else
                 {
@@ -376,7 +334,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     currentRow->appendField(field);
                     
                 }
-                else if(text[i-1].toLatin1() == '\'' && c == '/')
+                else if(text[i-1].toLatin1() == '*' && c == '/')
                 {
                     field->m_text += c;
                     state = IDLE;
@@ -416,6 +374,21 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     field = NULL;
                     state = IDLE;
                 }  
+            };break;
+            case GLOBAL_INCLUDE_FILE:
+            {
+                if(!isEscaped && c == '\n')
+                {
+                    state = IDLE;
+                }
+                else
+                {
+                    field->m_text += c;
+                    if(c == '>')
+                    {
+                        state = IDLE;
+                    }
+                }
             };break;
             case ESCAPED_CHAR:
             {
@@ -460,20 +433,11 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 {
                     i--;
 
-                    if(field->m_text.compare("rem",Qt::CaseInsensitive) == 0)
-                    {
-                        field->m_type = TextField::COMMENT;
-                        state = COMMENT;
-                    }
-                    else
-                    {
-                        if(isKeyword(field->m_text))
-                            field->m_type = TextField::KEYWORD;
-                    
-                    
-                        field = NULL;
-                        state = IDLE;
-                    }
+                    if(isKeyword(field->m_text))
+                        field->m_type = TextField::KEYWORD;
+    
+                    field = NULL;
+                    state = IDLE;
                 }
                 else
                 {
@@ -499,7 +463,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
 
 
 
-QVector<TextField*> SyntaxHighlighterBasic::getRow(unsigned int rowIdx)
+QVector<TextField*> SyntaxHighlighterRust::getRow(unsigned int rowIdx)
 {
     assert(rowIdx < getRowCount());
     

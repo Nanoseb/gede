@@ -36,8 +36,9 @@ SOURCES+=aboutdialog.cpp
 HEADERS+=aboutdialog.h
 
 SOURCES+=syntaxhighlighter.cpp syntaxhighlighterbasic.cpp syntaxhighlightercxx.cpp
+SOURCES+=syntaxhighlighterrust.cpp
 HEADERS+=syntaxhighlighter.h syntaxhighlighterbasic.h syntaxhighlightercxx.h
-
+HEADERS+=syntaxhighlighterrust.h
 
 SOURCES+=ini.cpp
 HEADERS+=ini.h
@@ -50,6 +51,9 @@ HEADERS+=settings.h
 
 SOURCES+=tagscanner.cpp tagmanager.cpp
 HEADERS+=tagscanner.h   tagmanager.h
+
+SOURCES+=rusttagscanner.cpp
+HEADERS+=rusttagscanner.h
 
 HEADERS+=config.h
 

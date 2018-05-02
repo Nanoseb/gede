@@ -387,6 +387,7 @@ QStringList Settings::getDefaultCxxKeywordList()
     keywordList += "do";
     keywordList += "false";
     keywordList += "true";
+    keywordList += "default";
 
     keywordList += "sizeof";
     keywordList += "typedef";
@@ -406,9 +407,12 @@ QStringList Settings::getDefaultCxxKeywordList()
     keywordList += "class";
     keywordList += "static";
     keywordList += "volatile";
-    keywordList += "return";
     keywordList += "new";
     keywordList += "const";
+
+    keywordList += "return";
+    keywordList += "break";
+    keywordList += "continue";
     
 
     keywordList += "uint32_t";
@@ -421,6 +425,67 @@ QStringList Settings::getDefaultCxxKeywordList()
     return keywordList;
 }
 
+
+QStringList Settings::getDefaultRustKeywordList()
+{
+    QStringList keywordList;
+
+    //
+    keywordList += "as";
+    keywordList += "break";
+    keywordList += "const";
+    keywordList += "continue";
+    keywordList += "crate";
+    keywordList += "else";
+    keywordList += "enum";
+    keywordList += "extern";
+    keywordList += "false";
+    keywordList += "fn";
+    keywordList += "for";
+    keywordList += "if";
+    keywordList += "impl";
+    keywordList += "in";
+    keywordList += "let";
+    keywordList += "loop";
+    keywordList += "match";
+    keywordList += "mod";
+    keywordList += "move";
+    keywordList += "mut";
+    keywordList += "pub";
+    keywordList += "ref";
+    keywordList += "return";
+    keywordList += "self";
+    keywordList += "static";
+    keywordList += "struct";
+    keywordList += "super";
+    keywordList += "trait";
+    keywordList += "true";
+    keywordList += "type";
+    keywordList += "unsafe";
+    keywordList += "use";
+    keywordList += "where";
+    keywordList += "while";
+    keywordList += "yield";
+
+
+    keywordList += "println";
+    keywordList += "println!";
+    
+    keywordList += "i64";
+    keywordList += "i32";
+    keywordList += "i8";
+    keywordList += "i16";
+    keywordList += "u64";
+    keywordList += "u32";
+    keywordList += "u8";
+    keywordList += "u16";
+    keywordList += "f32";
+    keywordList += "f64";
+
+    keywordList += "bool";
+
+    return keywordList;
+}
 
 QStringList Settings::getDefaultBasicKeywordList()
 {
