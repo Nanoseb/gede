@@ -10,6 +10,7 @@ import shutil
 
 g_dest_path = "/usr/local"
 g_verbose = False
+g_exeName = "gede"
 
 # Run the make command
 def run_make(a_list):
@@ -23,7 +24,34 @@ def run_make(a_list):
             print(err)
     return errcode
 
+# Remove a file
+def removeFile(filename):
+    try:
+        os.remove(filename)
+    except OSError:
+        pass
 
+# Do a cleanup
+def doClean():
+    for p in ["./src",
+            "./tests/tagtest",
+            "./tests/highlightertest",
+            "./tests/ini"
+            ]:
+        print("Cleaning up in %s" % (p))
+        oldP = os.getcwd()
+        os.chdir(p)
+        if os.path.exists("Makefile"):
+            if run_make(["clean"]):
+                exit(1)
+        else:
+            os.system("rm -f *.o")
+        removeFile(g_exeName)
+        removeFile("Makefile")
+        removeFile(".qmake.stash")
+        os.chdir(oldP)
+
+    
 # Show usage
 def dump_usage():
     print("./build.py [OPTIONS]... COMMAND")
@@ -79,7 +107,6 @@ def detectQt():
 # Main entry
 if __name__ == "__main__":
     try:
-        os.chdir("src")
         do_clean = False
         do_install = False
         do_build = True
@@ -101,13 +128,9 @@ if __name__ == "__main__":
                 exit(dump_usage())
 
         if do_clean:
-            print("Cleaning")
-            if os.path.exists("Makefile"):
-                if run_make(["clean"]):
-                    exit(1)
-            else:
-                os.system("rm -f *.o")
+            doClean();
         if do_build:
+            os.chdir("src")
             if not os.path.exists("Makefile"):
                 ensureExist("make")
                 ensureExist("gcc")
@@ -120,6 +143,7 @@ if __name__ == "__main__":
             if run_make([]):
                 exit(1)
         if do_install:
+            os.chdir("src")
             print("Installing to '%s'" % (g_dest_path) )
             try:
                 os.makedirs(g_dest_path + "/bin")
