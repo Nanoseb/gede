@@ -23,6 +23,8 @@
 #include <stdlib.h> // posix_openpt()
 #include <fcntl.h> //  O_RDWR
 #include <ctype.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 
 VarWatch::VarWatch()
     : m_inScope(true)
@@ -186,7 +188,35 @@ QString CoreVar::getData(DispFormat fmt) const
 }
 
     
+int Core::openPseudoTerminal()
+{
+    int ptsFd = posix_openpt(O_RDWR | O_NOCTTY);
+   
+    if(grantpt(ptsFd))
+        errorMsg("Failed to grantpt");
+    if(unlockpt(ptsFd))
+        errorMsg("Failed to unlock pt");
 
+    // Set window size
+    struct winsize term_winsize;
+    term_winsize.ws_col = 80;
+    term_winsize.ws_row = 20;
+    term_winsize.ws_xpixel = 80 * 8;
+    term_winsize.ws_ypixel = 20 * 8;
+    if(ioctl(ptsFd, TIOCSWINSZ, &term_winsize) < 0)
+    {
+        errorMsg("ioctl TIOCSWINSZ failed (%s)", strerror(errno));
+    }
+
+/*
+    // Set controlling
+    if (ioctl(ptsFd, TIOCSCTTY, (char *)0) < 0)
+    {
+        errorMsg("ioctl TIOCSCTTY failed (%s)", strerror(errno));
+    }
+*/
+    return ptsFd;
+}
 
 
 
@@ -201,22 +231,21 @@ Core::Core()
     ,m_isRemote(false)
     ,m_ptsFd(0)
     ,m_scanSources(false)
+    ,m_ptsListener(NULL)
     ,m_memDepth(32)
 {
     
     Com& com = Com::getInstance();
     com.setListener(this);
 
-    m_ptsFd = posix_openpt(O_RDWR | O_NOCTTY);
-   
-    if(grantpt(m_ptsFd))
-        errorMsg("Failed to grantpt");
-    if(unlockpt(m_ptsFd))
-        errorMsg("Failed to unlock pt");
+    m_ptsFd = openPseudoTerminal();
+
+
+
+
+
     infoMsg("Using: %s", ptsname(m_ptsFd));
     
-    m_ptsListener = new QSocketNotifier(m_ptsFd, QSocketNotifier::Read);
-    connect(m_ptsListener, SIGNAL(activated(int)), this, SLOT(onGdbOutput(int)));
 
 }
 
@@ -231,7 +260,7 @@ Core::~Core()
     }
 
     delete m_ptsListener;
-    
+    m_ptsListener = NULL;
     Com& com = Com::getInstance();
     com.setListener(NULL);
 
@@ -480,10 +509,17 @@ void Core::onGdbOutput(int socketFd)
     if(n > 0)
     {
         buff[n] = '\0';
+
+        QString str = QString::fromUtf8(buff);
+        m_inf->ICore_onTargetOutput(str);
+
     }
-    QString str = buff;
-    str.replace("\r","");
-    m_inf->ICore_onTargetOutput(str);
+    else
+    {
+        delete m_ptsListener;
+        m_ptsListener = NULL;
+    }
+
 }
 
 
@@ -635,12 +671,20 @@ void Core::gdbRun()
     Tree resultData;
     ICore::TargetState oldState;
 
+
     if(m_targetState == ICore::TARGET_STARTING || m_targetState == ICore::TARGET_RUNNING)
     {
         if(m_inf)
             m_inf->ICore_onMessage("Program is currently running");
         return;
     }
+
+    //
+    if(m_ptsListener)
+        delete m_ptsListener;
+    m_ptsListener = new QSocketNotifier(m_ptsFd, QSocketNotifier::Read);
+    connect(m_ptsListener, SIGNAL(activated(int)), this, SLOT(onGdbOutput(int)));
+
 
     m_pid = 0;
     oldState = m_targetState;

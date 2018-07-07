@@ -38,7 +38,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_fileIcon.addFile(QString::fromUtf8(":/images/res/file.png"), QSize(), QIcon::Normal, QIcon::Off);
     m_folderIcon.addFile(QString::fromUtf8(":/images/res/folder.png"), QSize(), QIcon::Normal, QIcon::Off);
 
-    
+    m_ui.scrollArea->setWidgetResizable(true);
+    m_ui.scrollArea->setBackgroundRole(QPalette::Base);
 
 
     //
@@ -176,6 +177,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_gui_default_splitter3State = m_ui.splitter_3->saveState();
     m_gui_default_splitter4State = m_ui.splitter_4->saveState();
 
+    m_ui.targetOutputView->setConfig(&m_cfg);
 }
 
 
@@ -226,7 +228,7 @@ void MainWindow::showWidgets()
     currentSelection = m_ui.tabWidget_2->currentWidget();
     m_ui.tabWidget_2->clear();
     if(m_cfg.m_viewWindowTargetOutput)
-        m_ui.tabWidget_2->insertTab(0, m_ui.targetOutputView, "Target Output");
+        m_ui.tabWidget_2->insertTab(0, m_ui.scrollArea, "Program Console");
     if(m_cfg.m_viewWindowGdbOutput)
         m_ui.tabWidget_2->insertTab(0, m_ui.logView, "GDB Output");
     selectionIdx = m_ui.tabWidget_2->indexOf(currentSelection);
@@ -408,6 +410,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 /**
  * @brief Execution has stopped.
+ * @param path     Path of the source file last executed. 
  * @param lineNo   The line which is about to execute (1=first).
  */
 void MainWindow::ICore_onStopped(ICore::StopReason reason, QString path, int lineNo)
@@ -941,8 +944,10 @@ void MainWindow::onAbout()
 void MainWindow::onRun()
 {
     Core &core = Core::getInstance();
-    core.gdbRun();
 
+    m_ui.targetOutputView->clearAll();
+
+    core.gdbRun();
 }
 
 
@@ -1480,7 +1485,7 @@ void MainWindow::setConfig()
     m_ui.logView->setFont(m_gdbOutputFont);
 
     m_outputFont = QFont(m_cfg.m_outputFontFamily, m_cfg.m_outputFontSize);
-    m_ui.targetOutputView->setFont(m_outputFont);
+    m_ui.targetOutputView->setMonoFont(m_outputFont);
     
     m_autoVarCtl.setConfig(&m_cfg);
 
@@ -1535,7 +1540,8 @@ void MainWindow::ICore_onSignalReceived(QString signalName)
 void MainWindow::ICore_onTargetOutput(QString message)
 {
 
-    m_ui.targetOutputView->append(message);
+    m_ui.targetOutputView->appendLog(message);
+    m_ui.scrollArea->verticalScrollBar()->setSliderPosition(m_ui.scrollArea->verticalScrollBar()->maximum());
 
 }
 

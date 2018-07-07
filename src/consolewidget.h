@@ -9,22 +9,73 @@
 #ifndef FILE__CONSOLEWIDGET_H
 #define FILE__CONSOLEWIDGET_H
 
-#include <QPlainTextEdit>
+#include <QMenu>
+#include <QTextEdit>
+#include <QVector>
+#include <QFont>
+#include "settings.h"
 
 
-class ConsoleWidget : public QPlainTextEdit
+class ConsoleWidget : public QWidget
 {
     Q_OBJECT
 public:
-    ConsoleWidget(QWidget *parent);
+    ConsoleWidget(QWidget *parent = NULL);
     virtual ~ConsoleWidget();
 
-    void append(QString text);
-    
-protected:
+    void appendLog(QString text);
 
+    void clearAll();
+
+    void setMonoFont(QFont font);
+    void setConfig(Settings *cfg);
+
+public slots:
+    void onCopyContent();
+    void onClearAll();
+
+private:
+    int getRowHeight();
+    void insert(QChar c);
+    void showPopupMenu(QPoint pos);
+    void mousePressEvent( QMouseEvent * event );
+    bool eventFilter(QObject *obj, QEvent *event);
+    QColor getFgColor(int code);
+    QColor getBgColor(int code);
+
+protected:
+    void paintEvent ( QPaintEvent * event );
     void keyPressEvent ( QKeyEvent * event );
 
+public:
+
+    QFont m_font;
+    QFontMetrics *m_fontInfo;
+    
+public:
+
+    enum { ST_IDLE, ST_OSC_PARAM, ST_OSC_STRING, ST_SECBYTE, ST_CSI_PARAM, ST_CSI_INTER } m_ansiState;
+
+    QString m_ansiParamStr;
+    QString m_ansiInter;
+    QString m_ansiOscString;
+    int m_fgColor;
+    int m_bgColor;
+
+    struct Block
+    {
+        public:
+        int m_fgColor;
+        int m_bgColor;
+        QString text;
+    };
+    typedef QVector <Block> Line;
+    QVector <Line> m_lines;
+
+    int m_cursorX;
+    int m_cursorY;
+    QMenu m_popupMenu;
+    Settings *m_cfg;
 
 };
 

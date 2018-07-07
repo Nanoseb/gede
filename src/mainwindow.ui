@@ -70,14 +70,21 @@
         </widget>
         <widget class="QWidget" name="tab_5">
          <attribute name="title">
-          <string>Target Output</string>
+          <string>Program Console</string>
          </attribute>
          <layout class="QVBoxLayout" name="verticalLayout_6">
           <item>
-           <widget class="ConsoleWidget" name="targetOutputView">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
+           <widget class="QScrollArea" name="scrollArea">
+            <widget class="ConsoleWidget" name="targetOutputView">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>297</width>
+               <height>10</height>
+              </rect>
+             </property>
+            </widget>
            </widget>
           </item>
          </layout>
@@ -407,7 +414,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>Target Output</string>
+    <string>Program Console</string>
    </property>
   </action>
   <action name="actionViewGdbOutput">
@@ -435,8 +442,9 @@
  <customwidgets>
   <customwidget>
    <class>ConsoleWidget</class>
-   <extends>QPlainTextEdit</extends>
-   <header location="global">consolewidget.h</header>
+   <extends>QWidget</extends>
+   <header>consolewidget.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <tabstops>
