@@ -837,7 +837,10 @@ CodeViewTab* MainWindow::open(QString filename)
         codeViewTab->setConfig(&m_cfg);
 
         if(codeViewTab->open(filename,tagList))
+        {
+            delete codeViewTab;
             return NULL;
+        }
 
         // Add the new codeview tab
         m_ui.editorTabWidget->addTab(codeViewTab, getFilenamePart(filename));
@@ -1597,10 +1600,14 @@ void MainWindow::setStatusLine(Settings &cfg)
     }
     else if(cfg.m_connectionMode == MODE_COREDUMP)
     {
-        statusText.sprintf("[%s] [%s]", stringToCStr(cfg.m_coreDumpProgram), stringToCStr(cfg.m_coreDumpFile));
+        statusText.sprintf("[%s] [%s]", stringToCStr(cfg.m_lastProgram), stringToCStr(cfg.m_coreDumpFile));
+    }
+    else if(cfg.m_connectionMode == MODE_PID)
+    {
+        statusText.sprintf("[%s] [PID:%d]", stringToCStr(cfg.m_lastProgram), cfg.m_runningPid);
     }
     else
-        statusText.sprintf("[%s] [%s:%d]", stringToCStr(cfg.m_tcpProgram), stringToCStr(cfg.m_tcpHost), (int)cfg.m_tcpPort);
+        statusText.sprintf("[%s] [%s:%d]", stringToCStr(cfg.m_lastProgram), stringToCStr(cfg.m_tcpHost), (int)cfg.m_tcpPort);
     w.m_statusLineWidget.setText(statusText);
 }
 

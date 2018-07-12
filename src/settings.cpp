@@ -18,7 +18,8 @@
 
 
 Settings::Settings()
-: m_connectionMode(MODE_LOCAL)
+: m_globalProjConfig(false),
+    m_connectionMode(MODE_LOCAL)
     ,m_tcpPort(0)
 {
     m_viewWindowStack = true;
@@ -113,8 +114,8 @@ void Settings::loadDefaultsAdvanced()
 
 void Settings::load()
 {
-    loadProjectConfig();
     loadGlobalConfig();
+    loadProjectConfig();
 }
  
 
@@ -127,6 +128,8 @@ void Settings::loadGlobalConfig()
     if(tmpIni.appendLoad(globalConfigFilename))
         infoMsg("Failed to load global ini '%s'. File will be created.", stringToCStr(globalConfigFilename));
 
+    m_globalProjConfig = tmpIni.getBool("General/GlobalProjConfig", false);
+    
     loadDefaultsGui();
     loadDefaultsAdvanced();
 
@@ -213,8 +216,14 @@ void Settings::loadGlobalConfig()
 
 void Settings::loadProjectConfig()
 {
+    // Get project config path
+    QString filepath;
+    if(m_globalProjConfig)
+        filepath = QDir::homePath() + "/"  GLOBAL_CONFIG_DIR + "/" + PROJECT_GLOBAL_CONFIG_FILENAME;
+    else
+        filepath = PROJECT_CONFIG_FILENAME;
+
     // Load from file
-    QString filepath = PROJECT_CONFIG_FILENAME;
     Ini tmpIni;
     if(tmpIni.appendLoad(filepath))
         infoMsg("Failed to load project ini '%s'. File will be created.", stringToCStr(filepath));
@@ -227,18 +236,18 @@ void Settings::loadProjectConfig()
         case MODE_LOCAL: m_connectionMode = MODE_LOCAL;break;
         case MODE_TCP: m_connectionMode = MODE_TCP;break;
         case MODE_COREDUMP: m_connectionMode = MODE_COREDUMP;break;
+        case MODE_PID: m_connectionMode = MODE_PID;break;
     }
     m_tcpPort = tmpIni.getInt("TcpPort", 2000);
     m_tcpHost = tmpIni.getString("TcpHost", "localhost");
-    m_tcpProgram = tmpIni.getString("TcpProgram", "");
     m_initCommands = tmpIni.getStringList("InitCommands", m_initCommands);
     m_gdbPath = tmpIni.getString("GdpPath", "gdb");
     m_lastProgram = tmpIni.getString("LastProgram", "");
     m_argumentList = tmpIni.getStringList("LastProgramArguments", m_argumentList);
 
     m_coreDumpFile = tmpIni.getString("CoreDumpFile", "./core");
-    m_coreDumpProgram = tmpIni.getString("CoreDumpProgram", "");
-
+    
+    m_runningPid = tmpIni.getInt("RunningPid", 0);
         
     m_reloadBreakpoints = tmpIni.getBool("ReuseBreakpoints", false);
 
@@ -276,7 +285,12 @@ void Settings::save()
 void Settings::saveProjectConfig()
 {
 
-    QString filepath = PROJECT_CONFIG_FILENAME;
+    QString filepath;
+
+    if(m_globalProjConfig)
+        filepath = QDir::homePath() + "/"  GLOBAL_CONFIG_DIR + "/" + PROJECT_GLOBAL_CONFIG_FILENAME;
+    else
+        filepath = PROJECT_CONFIG_FILENAME;
     
     Ini tmpIni;
 
@@ -288,11 +302,11 @@ void Settings::saveProjectConfig()
     tmpIni.setString("TcpHost", m_tcpHost);
     tmpIni.setInt("Mode", (int)m_connectionMode);
     tmpIni.setString("LastProgram", m_lastProgram);
-    tmpIni.setString("TcpProgram", m_tcpProgram);
     tmpIni.setStringList("InitCommands", m_initCommands);
     tmpIni.setString("GdpPath", m_gdbPath);
     tmpIni.setString("CoreDumpFile", m_coreDumpFile);
-    tmpIni.setString("CoreDumpProgram", m_coreDumpProgram);
+    
+    tmpIni.setInt("RunningPid", m_runningPid);
 
     QStringList tmpArgs;
     tmpArgs = m_argumentList;
@@ -334,6 +348,8 @@ void Settings::saveGlobalConfig()
 
     tmpIni.appendLoad(globalConfigFilename);
 
+    tmpIni.setBool("General/GlobalProjConfig", m_globalProjConfig);
+    
     tmpIni.setBool("General/EnableDebugLog", m_enableDebugLog);
 
     tmpIni.setInt("Gui/CurrentLineStyle", m_currentLineStyle);
@@ -590,19 +606,7 @@ QStringList Settings::getDefaultBasicKeywordList()
  */
 QString Settings::getProgramPath()
 {
-    if(m_connectionMode == MODE_LOCAL)
-    {
-        return m_lastProgram;
-    }
-    else if(m_connectionMode == MODE_COREDUMP)
-    {
-        return m_coreDumpProgram;
-    }
-    else
-    {
-        return m_tcpProgram;
-    }
-    return "";
+    return m_lastProgram;
 }
 
 

@@ -76,6 +76,10 @@ SOURCES+=memorydialog.cpp memorywidget.cpp
 HEADERS+=memorydialog.h memorywidget.h
 FORMS += memorydialog.ui
 
+SOURCES += processlistdialog.cpp
+HEADERS += processlistdialog.h
+FORMS += processlistdialog.ui
+
 FORMS += mainwindow.ui
 FORMS += aboutdialog.ui
 FORMS += opendialog.ui
@@ -84,6 +88,9 @@ SOURCES+=colorbutton.cpp
 HEADERS+=colorbutton.h
 
 HEADERS+=autosignalblocker.h
+
+SOURCES+= execombobox.cpp
+HEADERS+= execombobox.h
 
 RESOURCES += resource.qrc
 

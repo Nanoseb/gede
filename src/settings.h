@@ -18,7 +18,8 @@ enum ConnectionMode
 {
     MODE_LOCAL = 0,  //!< Local program
     MODE_COREDUMP,   //!< Core dump file
-    MODE_TCP         //!< TCP/IP connection to a gdbserver
+    MODE_TCP,        //!< TCP/IP connection to a gdbserver
+    MODE_PID         //!< Connect to a running process
     
 };
 
@@ -58,16 +59,16 @@ class Settings
         void saveGlobalConfig();
         
     public:
+        bool m_globalProjConfig;
+
         QStringList m_argumentList;
         ConnectionMode m_connectionMode;
         int m_tcpPort;
         QString m_tcpHost;
-        QString m_tcpProgram;
         QStringList m_initCommands;
         QString m_gdbPath;
         QString m_lastProgram;
         QString m_coreDumpFile;
-        QString m_coreDumpProgram;
         bool m_download;
 
         QString m_fontFamily;
@@ -131,12 +132,12 @@ class Settings
         int m_progConBackspaceKey;
         int m_progConDelKey;
         
-
+        int m_runningPid;
         
-
         int m_tabIndentCount;
         typedef enum { HOLLOW_RECT = 0, FILLED_RECT } CurrentLineStyle;
         CurrentLineStyle m_currentLineStyle;
+
 };
 
 
