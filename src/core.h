@@ -9,7 +9,6 @@
 #ifndef FILE__CORE_H
 #define FILE__CORE_H
 
-#include <stdint.h>
 #include "com.h"
 #include <QList>
 #include <QMap>
@@ -89,9 +88,9 @@ public:
     void setVarType(QString varType) { m_varType = varType; };
     QString getVarType() { return m_varType; };
     void setData(Type type, QVariant data);
-    uint64_t getPointerAddress();
-    void setPointerAddress(uint64_t addr) { m_addressValid = true; m_address = addr; };
-    bool hasPointerAddress() { return m_addressValid; };
+    long long getAddress();
+    void setAddress(long long addr) { m_address = addr; };
+
 
     bool hasChildren() { return m_hasChildren; };
     
@@ -105,11 +104,10 @@ private:
 
     QString m_name;
     QVariant m_data;
-    uint64_t m_address; //!< The address of data the variable points to.
+    long long m_address;
     Type m_type;
     QString m_varType;
     bool m_hasChildren;
-    bool m_addressValid;
 };
 
 
@@ -128,9 +126,8 @@ class VarWatch
         QString getValue(CoreVar::DispFormat fmt = CoreVar::FMT_NATIVE) { return m_var.getData(fmt); };
 
         void setValue(QString value);
-        long long getPointerAddress() { return m_var.getPointerAddress(); };
-        bool hasPointerAddress() { return m_var.hasPointerAddress(); };
-
+        long long getAddress() { return m_var.getAddress(); };
+    
     private:
 
         QString watchId;
@@ -261,8 +258,6 @@ public:
     
     QStringList getLocalVars() { return m_localVars; };
 
-    uint64_t getAddress(VarWatch &w);
-    
 
     int gdbSetBreakpoint(QString filename, int lineNo);
     void gdbGetThreadList();
@@ -279,6 +274,7 @@ public:
     BreakPoint* findBreakPoint(QString fullPath, int lineNo);
     BreakPoint* findBreakPointByNumber(int number);
     void gdbRemoveBreakpoint(BreakPoint* bkpt);
+    void gdbRemoveAllBreakpoints();
 
     QList<ThreadInfo> getThreadList();
 

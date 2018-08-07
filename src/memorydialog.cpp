@@ -12,9 +12,7 @@
 #include "core.h"
 #include "util.h"
 
-#define SCROLL_ADDR_RANGE   0x10000ULL
-
-QByteArray MemoryDialog::getMemory(uint64_t startAddress, int count)
+QByteArray MemoryDialog::getMemory(unsigned int startAddress, int count)
 {
      Core &core = Core::getInstance();
    
@@ -30,7 +28,7 @@ MemoryDialog::MemoryDialog(QWidget *parent)
     
     m_ui.setupUi(this);
 
-    m_ui.verticalScrollBar->setRange(0, SCROLL_ADDR_RANGE/16);
+    m_ui.verticalScrollBar->setRange(0,0xffffffffUL/16);
     connect(m_ui.verticalScrollBar, SIGNAL(valueChanged(int)), this, SLOT(onVertScroll(int)));
 
     m_ui.memorywidget->setInterface(this);
@@ -42,54 +40,29 @@ MemoryDialog::MemoryDialog(QWidget *parent)
 
 }
 
-/**
- * @brief Converts a string entered by the user to an address.
- */
-uint64_t MemoryDialog::inputTextToAddress(QString text)
-{
-    // Remove leading zeroes
-    while(text.startsWith('0') && text.length() > 1)
-        text = text.mid(1);
-
-    // Starts with a '0x...' or '0X..'?
-    if(text.startsWith("x") || text.startsWith("X"))
-        text = "0" + text;
-    else if(text.lastIndexOf(QRegExp("[a-zA-Z]+")) != -1)
-    {
-        text = "0x" + text;
-    }
-    
-    return stringToLongLong(text);
-}
-
 
 void MemoryDialog::onUpdate()
 {
-    uint64_t addr = inputTextToAddress(m_ui.lineEdit_address->text());
+    uint64_t addr = stringToLongLong(m_ui.lineEdit_address->text());
     setStartAddress(addr);
 }
 
-void MemoryDialog::setStartAddress(uint64_t addr)
+void MemoryDialog::setStartAddress(unsigned int addr)
 {
-    uint64_t addrAligned = addr & ~0xfULL;
-
-    if(addrAligned < (SCROLL_ADDR_RANGE/2))
-        m_startScrollAddress = 0;
-    else
-        m_startScrollAddress = addrAligned - (SCROLL_ADDR_RANGE/2);
+    unsigned int addrAligned = addr & ~0xfULL;
     
     m_ui.memorywidget->setStartAddress(addrAligned);
-    m_ui.verticalScrollBar->setValue((addrAligned-m_startScrollAddress)/16);
+    m_ui.verticalScrollBar->setValue(addrAligned/16);
 
-    QString addrText = addrToString(addr);
+    QString addrText;
+    addrText.sprintf("0x%04x_%04x", addr>>16, addr&0xffff);
     m_ui.lineEdit_address->setText(addrText);
 }
 
 
 void MemoryDialog::onVertScroll(int pos)
 {
-    uint64_t addr = m_startScrollAddress + ((uint64_t)pos*16ULL);
-    m_ui.memorywidget->setStartAddress(addr);
+    m_ui.memorywidget->setStartAddress(((unsigned int)pos)*16UL);
 }
 
 void MemoryDialog::setConfig(Settings *cfg)

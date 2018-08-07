@@ -21,8 +21,8 @@
 static const int PAD_ADDR_LEFT = 10; //!< Pad length left to the address field
 static const int PAD_ADDR_RIGHT = 10; //!< Pad length right to the address field.
 static const int PAD_HEX_MIDDLE = 10;  //!< Space between the first 8 and the last 8 bytes in a row
-static const int PAD_INTER_HEX = 5; //!< Space between each 8 hex strings.
 static const int PAD_HEX_RIGHT = 10;   //!< Pad length right to the hex field.
+static const int PAD_DATA = 5;
 static const int BYTES_PER_ROW = 16;
 
 
@@ -32,7 +32,6 @@ MemoryWidget::MemoryWidget(QWidget *parent)
  ,m_selectionEnd(0)
  ,m_inf(0)
 {
-    m_addrCharWidth = 0;
     m_font = QFont("Monospace", 10);
     m_fontInfo = new QFontMetrics(m_font);
 
@@ -79,7 +78,7 @@ void MemoryWidget::setInterface(IMemoryWidget *inf)
 }
 
 
-void MemoryWidget::setStartAddress(uint64_t addr)
+void MemoryWidget::setStartAddress(unsigned int addr)
 {
 
     m_startAddress = addr;
@@ -116,7 +115,6 @@ char MemoryWidget::byteToChar(uint8_t d)
 
 
 
-
 void MemoryWidget::paintEvent ( QPaintEvent * event )
 {
     QPainter painter(this);
@@ -126,10 +124,10 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
     int HEADER_HEIGHT = getHeaderHeight();
     int x;
     int rowCount = ((size().height()-HEADER_HEIGHT)/rowHeight)+1;
-    uint64_t startAddress = m_startAddress;
-    
-    uint64_t selectionFirst;
-    uint64_t selectionLast;
+    unsigned int startAddress = m_startAddress;
+
+    unsigned int selectionFirst;
+    unsigned int selectionLast;
     if(m_selectionEnd < m_selectionStart)
     {
         selectionFirst = m_selectionEnd;
@@ -140,9 +138,7 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
         selectionFirst = m_selectionStart;
         selectionLast = m_selectionEnd;
     }
-
-    m_addrCharWidth = addrToString(m_startAddress+(rowCount*16ULL)).length();
-    
+     
     
     painter.setFont(m_font);
 
@@ -155,7 +151,7 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
     //    startAddress = 0xffffffffU-((rowCount-2)*16);
     
     // Draw 'address' field background
-    QRect rect2(0,0,PAD_ADDR_LEFT+(charWidth*m_addrCharWidth)+PAD_ADDR_RIGHT/2, event->rect().bottom()+1);
+    QRect rect2(0,0,PAD_ADDR_LEFT+charWidth*9+PAD_ADDR_RIGHT/2, event->rect().bottom()+1);
     painter.fillRect(rect2, Qt::lightGray);
 
     // Draw 'header' background
@@ -170,14 +166,14 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
     // Draw header
     text.sprintf("Address");
     x = PAD_ADDR_LEFT;
-    painter.drawText(x, rowHeight, text);
-    x += (charWidth*m_addrCharWidth)+PAD_ADDR_RIGHT;
+    painter.drawText(PAD_ADDR_LEFT, rowHeight, text);
+    x += (charWidth*9)+PAD_ADDR_RIGHT;
     for(int off = 0;off < 16;off++)
     {
         text.sprintf("%x", off);
         painter.drawText(x, rowHeight, text);
-        x += (charWidth*2)+PAD_INTER_HEX;
-        if(off==7)
+        x += (charWidth*2)+PAD_DATA;
+        if(off==8)
             x += PAD_HEX_MIDDLE;
     }
     x += PAD_HEX_RIGHT;
@@ -198,12 +194,12 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
         int y = HEADER_HEIGHT+rowHeight*rowIdx+rowHeight;
         x = PAD_ADDR_LEFT;
         
-        uint64_t memoryAddr = startAddress + rowIdx*16;
+        unsigned int memoryAddr = startAddress + rowIdx*16;
         if(memoryAddr < startAddress)
             break;
             
         painter.setPen(Qt::black);
-        text = addrToString(memoryAddr);
+        text.sprintf("%04x_%04x", (unsigned int)(memoryAddr>>16),(unsigned int)(memoryAddr&0xffffUL));
         painter.drawText(x, y, text);
         x += charWidth*text.length();
         x += PAD_ADDR_RIGHT;
@@ -227,9 +223,9 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
             painter.drawText(x, y, text);
             }
         
-            x += (charWidth*2)+PAD_INTER_HEX;
+            x += charWidth*text.length()+5;
 
-            if(off == 7)
+            if(off == 8)
                 x += PAD_HEX_MIDDLE;
         }
         x += PAD_HEX_RIGHT;
@@ -267,13 +263,13 @@ void MemoryWidget::paintEvent ( QPaintEvent * event )
 
 
 
-uint64_t MemoryWidget::getAddrAtPos(QPoint pos)
+unsigned int MemoryWidget::getAddrAtPos(QPoint pos)
 {
     const int rowHeight = getRowHeight();
     const int charWidth = m_fontInfo->width("H");
-    uint64_t addr;
-    const int field_hex_width = PAD_HEX_MIDDLE + 16*(PAD_INTER_HEX+charWidth*2) + PAD_HEX_RIGHT;
-    const int field_address_width = PAD_ADDR_LEFT+(charWidth*m_addrCharWidth)+PAD_ADDR_RIGHT;
+    unsigned int addr;
+    const int field_hex_width = PAD_HEX_MIDDLE + 16*(PAD_DATA+charWidth*2) + PAD_HEX_RIGHT;
+    const int field_address_width = PAD_ADDR_LEFT+(PAD_DATA+charWidth*9)+PAD_ADDR_RIGHT;
     int idx = 0;
     
     addr = m_startAddress+(pos.y()-getHeaderHeight())/rowHeight*BYTES_PER_ROW;
@@ -281,7 +277,6 @@ uint64_t MemoryWidget::getAddrAtPos(QPoint pos)
     // Adjust for the address column
     int x = pos.x();
     x -= field_address_width;
-
     if(x > 0)
     {
         // In the ascii field?
@@ -292,15 +287,13 @@ uint64_t MemoryWidget::getAddrAtPos(QPoint pos)
         else
         {
             // Adjust for the middle space
-            if(x > ((PAD_HEX_MIDDLE/2)+8*((charWidth*2)+PAD_INTER_HEX)))
+            if(x > (PAD_HEX_MIDDLE+8*((charWidth*2)+5)))
                 x -= PAD_HEX_MIDDLE;
 
             // Get the character index
-            idx = (x+PAD_INTER_HEX/2) / ((charWidth*2)+PAD_INTER_HEX);
+            idx = x / (((charWidth*2)+5));
         }
     }
-    else if(x < -PAD_ADDR_RIGHT/2)
-        addr -= 1;
     if(idx < 0)
         idx = -1;
     else if(BYTES_PER_ROW-1 < idx)
@@ -356,7 +349,7 @@ void MemoryWidget::mousePressEvent(QMouseEvent * event)
 
 void MemoryWidget::onCopy()
 {
-    uint64_t selectionFirst,selectionLast;
+    unsigned int selectionFirst,selectionLast;
     
     if(m_selectionEnd < m_selectionStart)
     {
@@ -381,7 +374,7 @@ void MemoryWidget::onCopy()
             unsigned int j;
             
             // Display address
-            subText.sprintf("0x%08llx | ", (unsigned long long)addr);
+            subText.sprintf("0x%08lx | ", addr);
             contentStr += subText;
 
             // Display data as hex

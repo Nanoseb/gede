@@ -44,7 +44,6 @@ public:
 
     void ICore_onStateChanged(ICore::TargetState state);
 private:
-    uint64_t getAddress(VarWatch &w);
     QString getWatchId(QTreeWidgetItem* item);
 
     void selectedChangeDisplayFormat(VarCtl::DispFormat fmt);

@@ -13,10 +13,37 @@
 #include <assert.h>
 
 TreeNode::TreeNode()
+    : m_parent(NULL)
+    ,m_address(0)
 {
 
 }
 
+TreeNode::TreeNode(QString name)
+    : m_parent(NULL)
+    ,m_name(name)
+    ,m_address(0)
+{
+    
+};
+
+int TreeNode::getDataInt(int defaultValue) const
+{
+    bool ok = false;
+    int val = m_data.toInt(&ok,0);
+    if(ok)
+        return val;
+    return defaultValue;
+}
+
+void TreeNode::addChild(TreeNode *child)
+{
+    child->m_parent = this;
+   
+    m_children.push_back(child);
+    m_childMap[child->m_name] = child;
+
+}
 
 
 void TreeNode::copy(const TreeNode &other)
@@ -32,7 +59,7 @@ void TreeNode::copy(const TreeNode &other)
     // Copy all children
     for(int i = 0;i < other.m_children.size();i++)
     {
-        TreeNode* otherNode = other.m_children[i];
+        const TreeNode* otherNode = other.m_children[i];
         TreeNode* thisNode = new TreeNode;
         thisNode->copy(*otherNode);
 
@@ -42,17 +69,6 @@ void TreeNode::copy(const TreeNode &other)
 }
 
 
-QStringList TreeNode::getChildList() const
-{
-    QStringList list;
-    for(int i =0;i < m_children.size();i++)
-    {
-        TreeNode* node = m_children[i];
-        assert(node != NULL);
-        list += node->getName();
-    }
-    return list;
-}
 
 
 TreeNode::~TreeNode()
@@ -83,8 +99,8 @@ void TreeNode::removeAll()
 void TreeNode::dump(int parentCnt)
 {
     QString text;
-    text.sprintf("+- %s='%s'", stringToCStr(m_name),
-                        stringToCStr(m_data));
+    text.sprintf("+- %s='%s' (0x%x)", stringToCStr(m_name),
+                        stringToCStr(m_data), m_address);
 
     for(int i = 0;i < parentCnt;i++)
         text  = "    " + text;
@@ -114,8 +130,30 @@ Tree::Tree()
 
 
 
+int TreeNode::getChildDataInt(QString childName, int defaultValue) const
+{
+    TreeNode *child = findChild(childName);
+    if(child)
+        return child->getDataInt(defaultValue);
+    return defaultValue;
+}
 
 
+QString TreeNode::getChildDataString(QString childName) const
+{
+    TreeNode *child = findChild(childName);
+    if(child)
+        return child->m_data;
+    return "";
+}
+
+long long TreeNode::getChildDataLongLong(QString childPath, long long defaultValue) const
+{
+    TreeNode *child = findChild(childPath);
+    if(child)
+        return stringToLongLong(stringToCStr(child->m_data));
+    return defaultValue;
+}
 
     
 TreeNode *TreeNode::findChild(QString path) const
@@ -138,7 +176,7 @@ TreeNode *TreeNode::findChild(QString path) const
         restPath = path.mid(indexPos+1);
     }
 
-    if(childName[0].toLatin1() == '#')
+    if(childName.startsWith('#'))
     {
         QString numStr = childName.mid(1);
         int idx = atoi(stringToCStr(numStr))-1;
@@ -153,19 +191,34 @@ TreeNode *TreeNode::findChild(QString path) const
     }
     else
     {
-    // Look for the child
-    for(int u = 0;u < getChildCount();u++)
-    {
-        TreeNode *child = getChild(u);
+        
+        TreeNode *child;
 
-        if(child->getName() == childName)
+        if(m_childMap.contains(childName))
         {
+            child = m_childMap[childName];
+            assert(child->m_name == childName);
             if(restPath.isEmpty())
                 return child;
             else
                 return child->findChild(restPath);
         }
-    }
+        else
+        {
+        // Look for the child
+        for(int u = 0;u < getChildCount();u++)
+        {
+            child = getChild(u);
+
+            if(child->getName() == childName)
+            {
+                if(restPath.isEmpty())
+                    return child;
+                else
+                    return child->findChild(restPath);
+            }
+        }
+        }
     }
         
     return NULL;
@@ -175,48 +228,27 @@ TreeNode *TreeNode::findChild(QString path) const
 
 QString Tree::getString(QString path) const
 {
-    TreeNode *node = m_root.findChild(path);
-    if(node)
-        return node->getData();
-    return "";
+    return m_root.getChildDataString(path);
 }
 
 
 int Tree::getInt(QString path, int defaultValue) const
 {
-    QString str = getString(path);
-    if(str.isEmpty())
-        return defaultValue;
-    else
-        return str.toInt(0,0);
+    return m_root.getChildDataInt(path, defaultValue);
 }
 
 
 long long Tree::getLongLong(QString path) const
 {
-    QString str = getString(path);
-    return stringToLongLong(stringToCStr(str));
+    return m_root.getChildDataLongLong(path);
 }
 
-
-
-int Tree::getChildCount(QString path) const
+TreeNode* Tree::findChild(QString path) const
 {
-    int cnt = 0;
-    TreeNode *node = m_root.findChild(path);
-    if(node)
-        cnt = node->getChildCount();
-    return cnt;
+    return m_root.findChild(path);
 }
-     
-QStringList Tree::getChildList(QString path) const
-{
-    QStringList list;
-    TreeNode *node = m_root.findChild(path);
-    if(node)
-        list = node->getChildList();
-    return list;
-}
+
+
 
 void Tree::removeAll()
 {

@@ -14,7 +14,7 @@
 class IMemoryWidget
 {
 public:
-    virtual QByteArray getMemory(uint64_t startAddress, int count) = 0;
+    virtual QByteArray getMemory(unsigned int startAddress, int count) = 0;
 
 };
 
@@ -34,14 +34,14 @@ public:
     
 private:
     int getRowHeight();
-    uint64_t getAddrAtPos(QPoint pos);
+    unsigned int getAddrAtPos(QPoint pos);
     int getHeaderHeight();
     char byteToChar(uint8_t d);
 
     virtual void keyPressEvent(QKeyEvent *e);
     
 public slots:
-    void setStartAddress(uint64_t addr);
+    void setStartAddress(unsigned int addr);
     void onCopy();
     
 private:
@@ -54,11 +54,11 @@ private:
     QFontMetrics *m_fontInfo;
 
     bool m_selectionStartValid;
-    uint64_t m_startAddress;
-    uint64_t m_selectionStart, m_selectionEnd;
+    unsigned int m_startAddress;
+    unsigned int m_selectionStart, m_selectionEnd;
     IMemoryWidget *m_inf;
     QMenu m_popupMenu;
-    int m_addrCharWidth;
+    
 };
 
 #endif // FILE__MEMORYWIDGET_H
