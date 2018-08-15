@@ -24,8 +24,6 @@ public:
     
     TreeNode *findChild(QString path) const;
 
-    uint32_t getAddress() const { return m_address; };
-    void setAddress(uint32_t addr) { m_address = addr; };
     
     QStringList getChildList() const;
     void addChild(TreeNode *child) { m_children.push_back(child); };
@@ -50,7 +48,6 @@ public:
     QString m_name;
     QString m_data;
     QVector<TreeNode*> m_children;
-    uint32_t m_address;
 
 private:
         TreeNode(const TreeNode &) { };
