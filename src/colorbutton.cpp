@@ -65,6 +65,7 @@ void MColorButton::showColorSelectDialog(QColor *color)
     if(newColor.isValid())
         *color = newColor;
 
+    update();
 }
 
 
