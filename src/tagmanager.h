@@ -34,6 +34,8 @@ class ScannerWorker : public QThread
         void requestQuit();
         void queueScan(QString filePath);
 
+        bool isIdle();
+        
     private:
         void scan(QString filePath);
     
@@ -53,6 +55,7 @@ class ScannerWorker : public QThread
         QList<QString> m_workQueue;
         bool m_quit;
         Settings m_cfg;
+        bool m_isIdle;
 
 };
 
@@ -67,7 +70,7 @@ public:
     virtual ~TagManager();
 
 
-    int queueScan(QString filePath);
+    int queueScan(QStringList filePathList);
     void scan(QString filePath, QList<Tag> *tagList);
 
     void waitAll();
@@ -76,6 +79,11 @@ public:
 
     void getTags(QString filePath, QList<Tag> *tagList);
 
+    void lookupTag(QString name, QList<Tag> *tagList);
+
+signals:
+    void onAllScansDone();
+    
 private slots:
     void onScanDone(QString filePath, QList<Tag> *tags);
     

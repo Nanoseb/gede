@@ -10,11 +10,6 @@
 
 #include "core.h"
 
-#include "ini.h"
-#include "util.h"
-#include "log.h"
-#include "gdbmiparser.h"
-
 #include <QByteArray>
 #include <QDebug>
 #include <unistd.h>
@@ -28,6 +23,12 @@
 #include <string.h>
 #include <errno.h>
 
+#include "ini.h"
+#include "util.h"
+#include "log.h"
+#include "gdbmiparser.h"
+
+
 VarWatch::VarWatch()
     : m_inScope(true)
     ,m_hasChildren(false)
@@ -35,8 +36,8 @@ VarWatch::VarWatch()
 }
 
 VarWatch::VarWatch(QString watchId_, QString name_)
-  : watchId(watchId_)
-    ,name(name_)
+  : m_watchId(watchId_)
+    ,m_name(name_)
     ,m_inScope(true)
     ,m_var(name_)
     ,m_hasChildren(false)
@@ -80,7 +81,7 @@ CoreVar::~CoreVar()
 }
 
     
-uint64_t CoreVar::getPointerAddress()
+quint64 CoreVar::getPointerAddress()
 {
     return m_address;
 }
@@ -442,11 +443,7 @@ int Core::initLocal(Settings *cfg, QString gdbPath, QString programPath, QString
     }
 
 
-    if(rc == 0)
-        gdbRun();
-
-    
-    return 0;
+    return rc;
 }
 
 
@@ -557,8 +554,7 @@ int Core::initRemote(Settings *cfg, QString gdbPath, QString programPath, QStrin
     
     gdbGetFiles();
 
-    gdbRun();
-
+    
     return 0;
 }
 
@@ -608,7 +604,7 @@ void Core::onGdbOutput(int socketFd)
  * @brief Reads a memory area.
  * @return 0 on success.
  */
-int Core::gdbGetMemory(uint64_t addr, size_t count, QByteArray *data)
+int Core::gdbGetMemory(quint64 addr, size_t count, QByteArray *data)
 {
     Com& com = Com::getInstance();
     Tree resultData;
@@ -658,7 +654,7 @@ bool Core::gdbGetFiles()
     for(int m = 0;m < m_sourceFiles.size();m++)
     {
         SourceFile *sourceFile = m_sourceFiles[m];
-        fileLookup[sourceFile->fullName] = false;
+        fileLookup[sourceFile->m_fullName] = false;
         delete sourceFile;
     }
     m_sourceFiles.clear();
@@ -700,8 +696,8 @@ bool Core::gdbGetFiles()
                         
                         sourceFile = new SourceFile; 
 
-                        sourceFile->name = name;
-                        sourceFile->fullName = fullname;
+                        sourceFile->m_name = name;
+                        sourceFile->m_fullName = fullname;
 
                         m_sourceFiles.append(sourceFile);
                     }
@@ -940,6 +936,33 @@ Core& Core::getInstance()
     return core;
 }
 
+
+/**
+ * @brief Evaluate an data expression.
+ * @return 0 on success.
+ */
+int Core::evaluateExpression(QString expr, QString *data)
+{
+    Com& com = Com::getInstance();
+    Tree resultData;
+    GdbResult res;
+    int rc = 0;
+    
+    assert(expr.isEmpty() == false);
+
+    if(expr.isEmpty())
+        return -1;
+    
+    res = com.commandF(&resultData, "-data-evaluate-expression %s", stringToCStr(expr));
+    if(res != GDB_DONE)
+    {
+        rc = -1;
+    }
+    else
+        *data = resultData.getString("value");
+
+    return rc;
+}
 
 /**
  * @brief Returns info for an existing watch.
@@ -1398,7 +1421,7 @@ BreakPoint* Core::findBreakPoint(QString fullPath, int lineNo)
         BreakPoint *bkpt = m_breakpoints[i];
 
     
-        if(bkpt->lineNo == lineNo && fullPath == bkpt->fullname)
+        if(bkpt->m_lineNo == lineNo && fullPath == bkpt->m_fullname)
         {
             return bkpt;
         }
@@ -1442,12 +1465,12 @@ void Core::dispatchBreakpointTree(Tree &tree)
         bkpt = new BreakPoint(number);
         m_breakpoints.push_back(bkpt);
     }
-    bkpt->lineNo = lineNo;
-    bkpt->fullname = rootNode->getChildDataString("fullname");
+    bkpt->m_lineNo = lineNo;
+    bkpt->m_fullname = rootNode->getChildDataString("fullname");
 
     // We did not receive 'fullname' from gdb.
     // Lets try original-location instead...
-    if(bkpt->fullname.isEmpty())
+    if(bkpt->m_fullname.isEmpty())
     {
         QString orgLoc = rootNode->getChildDataString("original-location");
         int divPos = orgLoc.lastIndexOf(":");
@@ -1455,7 +1478,7 @@ void Core::dispatchBreakpointTree(Tree &tree)
             warnMsg("Original-location in unknown format");
         else
         {
-            bkpt->fullname = orgLoc.left(divPos);
+            bkpt->m_fullname = orgLoc.left(divPos);
         }
     }
     
@@ -1575,11 +1598,11 @@ void Core::onResult(Tree &tree)
                 }
                 
                 ThreadInfo tinfo;
-                tinfo.id = atoi(stringToCStr(threadId));
+                tinfo.m_id = atoi(stringToCStr(threadId));
                 tinfo.m_name = targetId;
                 tinfo.m_details = details;
                 tinfo.m_func = funcName;
-                m_threadList[tinfo.id] = tinfo;
+                m_threadList[tinfo.m_id] = tinfo;
             }
 
             if(m_inf)
@@ -1736,6 +1759,8 @@ int Core::gdbSetBreakpoint(QString filename, int lineNo)
     int rc = 0;
     
     assert(filename != "");
+    if(filename.isEmpty())
+        return -1;
 
     ensureStopped();
     
@@ -1855,10 +1880,10 @@ int Core::changeWatchVariable(QString watchId, QString newValue)
 /**
  * @brief Returns the address in memory where the variable is stored in.
  */
-uint64_t Core::getAddress(VarWatch &w)
+quint64 Core::getAddress(VarWatch &w)
 {
     int rc = 0;
-    uint64_t addr = 0;
+    quint64 addr = 0;
     GdbResult gdbRes = GDB_ERROR;
     Com& com = Com::getInstance();
     Tree resultData;

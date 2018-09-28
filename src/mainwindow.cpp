@@ -9,23 +9,28 @@
  */
 
 #include "mainwindow.h"
-#include "util.h"
-#include "log.h"
-#include "core.h"
-#include <assert.h>
-#include "aboutdialog.h"
-#include "settingsdialog.h"
-#include "tagscanner.h"
-#include "codeview.h"
 
-#include "memorydialog.h"
 #include <QDirIterator>
 #include <QMessageBox>
 #include <QScrollBar>
 
+#include <assert.h>
+
+#include "util.h"
+#include "log.h"
+#include "core.h"
+#include "aboutdialog.h"
+#include "settingsdialog.h"
+#include "tagscanner.h"
+#include "codeview.h"
+#include "memorydialog.h"
+#include "gotodialog.h"
+
+
 
 MainWindow::MainWindow(QWidget *parent)
       : QMainWindow(parent)
+      ,m_locator(&m_tagManager, &m_sourceFiles)
 {
     QStringList names;
     
@@ -37,9 +42,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_fileIcon.addFile(QString::fromUtf8(":/images/res/file.png"), QSize(), QIcon::Normal, QIcon::Off);
     m_folderIcon.addFile(QString::fromUtf8(":/images/res/folder.png"), QSize(), QIcon::Normal, QIcon::Off);
-
-    m_ui.scrollArea->setWidgetResizable(true);
-    m_ui.scrollArea->setBackgroundRole(QPalette::Base);
 
 
     //
@@ -65,10 +67,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     //
     QTreeWidget *treeWidget = m_ui.treeWidget_file;
-    names.clear();
-    names += "Name";
-    treeWidget->setHeaderLabels(names);
-    treeWidget->setColumnCount(1);
     treeWidget->setColumnWidth(0, 200);
 
 
@@ -136,6 +134,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_ui.actionStop, SIGNAL(triggered()), SLOT(onStop()));
     connect(m_ui.actionNext, SIGNAL(triggered()), SLOT(onNext()));
     connect(m_ui.actionAbout, SIGNAL(triggered()), SLOT(onAbout()));
+    connect(m_ui.actionGoToLine, SIGNAL(triggered()), SLOT(onGoToLine()));
+    connect(m_ui.actionSearch, SIGNAL(triggered()), SLOT(onSearch()));
     connect(m_ui.actionStep_In, SIGNAL(triggered()), SLOT(onStepIn()));
     connect(m_ui.actionStep_Out, SIGNAL(triggered()), SLOT(onStepOut()));
     connect(m_ui.actionRun, SIGNAL(triggered()), SLOT(onRun()));
@@ -149,6 +149,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_ui.actionViewTargetOutput, SIGNAL(triggered()), SLOT(onViewTargetOutput()));
     connect(m_ui.actionViewGdbOutput, SIGNAL(triggered()), SLOT(onViewGdbOutput()));
     connect(m_ui.actionViewFileBrowser, SIGNAL(triggered()), SLOT(onViewFileBrowser()));
+    connect(m_ui.actionGoToMain, SIGNAL(triggered()), SLOT(onGoToMain()));
 
     connect(m_ui.actionDefaultViewSetup, SIGNAL(triggered()), SLOT(onDefaultViewSetup()));
 
@@ -159,16 +160,40 @@ MainWindow::MainWindow(QWidget *parent)
     Core &core = Core::getInstance();
     core.setListener(this);
 
+    connect(&m_tagManager, SIGNAL(onAllScansDone()), SLOT(onAllTagScansDone()));
+
+    //Setup the function treewidget
+    treeWidget = m_ui.treeWidget_functions;
+    treeWidget->setColumnWidth(0, 200);
+    connect(m_ui.treeWidget_functions, SIGNAL(itemClicked(QTreeWidgetItem * , int )),
+            SLOT(onFuncWidgetItemSelected(QTreeWidgetItem * , int )));
+
+    connect(m_ui.lineEdit_search, SIGNAL(textChanged(const QString &)), SLOT(onIncSearch_textChanged(const QString&)));
+    connect(m_ui.checkBox_search, SIGNAL(stateChanged (int)), SLOT(onSearchCheckBoxStateChanged(int)));
+    connect(m_ui.pushButton_searchNext, SIGNAL(clicked()), SLOT(onSearchNext()));
+    connect(m_ui.pushButton_searchPrev, SIGNAL(clicked()), SLOT(onSearchPrev()));
+    
+    m_ui.widget_search->hide();
 
     
+    //Setup the class treewidget
+    treeWidget = m_ui.treeWidget_classes;
+    treeWidget->setColumnWidth(0, 200);
+    connect(m_ui.treeWidget_classes, SIGNAL(itemClicked(QTreeWidgetItem * , int )),
+            SLOT(onFuncWidgetItemSelected(QTreeWidgetItem * , int )));
+
+
 
     installEventFilter(this);
 
     loadConfig();
 
+    // EditorTabWidget
     connect(m_ui.editorTabWidget, SIGNAL(tabCloseRequested(int)), SLOT(onCodeViewTab_tabCloseRequested(int)));
     connect(m_ui.editorTabWidget, SIGNAL(currentChanged(int)), SLOT(onCodeViewTab_currentChanged(int)));
-    
+    m_ui.editorTabWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_ui.editorTabWidget, SIGNAL(customContextMenuRequested(const QPoint &)), SLOT(onCodeViewTab_launchContextMenu(const QPoint&)));
+
     statusBar()->addPermanentWidget(&m_statusLineWidget);
 
 
@@ -180,6 +205,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_gui_default_splitter4State = m_ui.splitter_4->saveState();
 
     m_ui.targetOutputView->setConfig(&m_cfg);
+    
+    connect(m_ui.verticalScrollBar_console, SIGNAL(valueChanged(int)), m_ui.targetOutputView, SLOT(onScrollBar_valueChanged(int)));
+
+    m_ui.targetOutputView->setScrollBar(m_ui.verticalScrollBar_console);
+
 }
 
 
@@ -230,7 +260,7 @@ void MainWindow::showWidgets()
     currentSelection = m_ui.tabWidget_2->currentWidget();
     m_ui.tabWidget_2->clear();
     if(m_cfg.m_viewWindowTargetOutput)
-        m_ui.tabWidget_2->insertTab(0, m_ui.scrollArea, "Program Console");
+        m_ui.tabWidget_2->insertTab(0, m_ui.widget_console, "Program Console");
     if(m_cfg.m_viewWindowGdbOutput)
         m_ui.tabWidget_2->insertTab(0, m_ui.logView, "GDB Output");
     selectionIdx = m_ui.tabWidget_2->indexOf(currentSelection);
@@ -396,13 +426,17 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
         QWidget *widget = QApplication::focusWidget();
 
-        // 'Delete' key pressed in the var widget 
+        // 'Delete' key pressed in the var widget?
         if(widget == m_ui.varWidget)
         {
             m_watchVarCtl.onKeyPress(keyEvent);
             
         }
-        
+
+        if(keyEvent->key() == Qt::Key_Escape)
+        {
+            hideSearchBox();
+        }
         //qDebug() << "key " << keyEvent->key() << " from " << obj << "focus " << widget;
 
     }
@@ -590,7 +624,7 @@ void MainWindow::insertSourceFiles()
             QString ignoreDir = m_cfg.m_sourceIgnoreDirs[j];
             if(!ignoreDir.isEmpty())
             {
-                if(source->fullName.startsWith(ignoreDir))
+                if(source->m_fullName.startsWith(ignoreDir))
                     ignore = true;
             }
         }
@@ -598,8 +632,8 @@ void MainWindow::insertSourceFiles()
         if(!ignore)
         {
             FileInfo info;
-            info.name = source->name;
-            info.fullName = source->fullName;
+            info.m_name = source->m_name;
+            info.m_fullName = source->m_fullName;
             
             m_sourceFiles.push_back(info);
         }
@@ -607,19 +641,25 @@ void MainWindow::insertSourceFiles()
 
     
 
+    // Queue all scans
+    QStringList queueList;
     for(int i = 0;i < m_sourceFiles.size();i++)
     {
         FileInfo &info = m_sourceFiles[i];
+        queueList += info.m_fullName;
+    }
+    m_tagManager.queueScan(queueList);
 
-        m_tagManager.queueScan(info.fullName);
-        
-
+    
+    for(int i = 0;i < m_sourceFiles.size();i++)
+    {
+        const FileInfo &info = m_sourceFiles[i];
         QTreeWidgetItem *parentNode  = NULL;
 
         // Get parent path
         QString folderPath;
         QString filename;
-        dividePath(info.fullName, &filename, &folderPath);
+        dividePath(info.m_fullName, &filename, &folderPath);
         folderPath = simplifyPath(folderPath);
         
         if(!folderPath.isEmpty())
@@ -633,7 +673,7 @@ void MainWindow::insertSourceFiles()
         {
             item = new QTreeWidgetItem;
             item->setText(0, filename);
-            item->setData(0, Qt::UserRole, info.fullName);
+            item->setData(0, Qt::UserRole, info.m_fullName);
             item->setIcon(0, m_fileIcon);
             
             if(parentNode == NULL)
@@ -784,7 +824,74 @@ CodeViewTab* MainWindow::currentTab()
 }
 
 
+/**
+ * @brief Called when user right clicks on tab and chooses 'Close Tabs To The Left'.
+ */
+void MainWindow::onCodeViewTab_closeTabsToLeft()
+{
+    // Get the selected tab
+    QAction *action = static_cast<QAction *>(sender ());
+    int tabIdx  = action->data().toInt();
 
+    for(int i = 0;i < tabIdx;i++)
+    {
+        m_ui.editorTabWidget->removeTab(0);
+    }
+}
+
+
+/**
+ * @brief Called when user right clicks on tab and chooses 'Close Other Tabs'.
+ */
+void MainWindow::onCodeViewTab_closeOtherTabs()
+{
+    // Get the selected tab
+    QAction *action = static_cast<QAction *>(sender ());
+    int tabIdx  = action->data().toInt();
+
+    for(int i = 0;i < tabIdx;i++)
+    {
+        m_ui.editorTabWidget->removeTab(0);
+    }
+    while(m_ui.editorTabWidget->count() >= 2)
+    {
+        m_ui.editorTabWidget->removeTab(1);
+    }
+}
+
+
+/**
+ * @brief Called when the user right clicks on the opened file tab widget.
+ */
+void MainWindow::onCodeViewTab_launchContextMenu(const QPoint& pos)
+{
+    QAction *action;
+    QString title;
+
+    // Get tab
+    int tabIdx = m_ui.editorTabWidget->tabAt(pos);
+    if(tabIdx == -1)
+        return;
+
+    m_popupMenu.clear();
+
+    action = m_popupMenu.addSeparator();
+
+    // Add 'open'
+    action = m_popupMenu.addAction("Close Other Tabs");
+    action->setData(tabIdx);
+    connect(action, SIGNAL(triggered()), this, SLOT(onCodeViewTab_closeOtherTabs()));
+
+        
+    // Add 'Show current PC location'
+    action = m_popupMenu.addAction("Close Tabs To The Left");
+    action->setData(tabIdx);
+    connect(action, SIGNAL(triggered()), this, SLOT(onCodeViewTab_closeTabsToLeft()));
+
+    
+    QPoint popupPos = m_ui.editorTabWidget->mapToGlobal(pos);
+    m_popupMenu.popup(popupPos);
+}
 
 void MainWindow::onCodeViewTab_currentChanged( int tabIdx)
 {
@@ -797,6 +904,30 @@ void MainWindow::onCodeViewTab_tabCloseRequested ( int tabIdx)
     CodeViewTab *codeViewTab = (CodeViewTab *)m_ui.editorTabWidget->widget(tabIdx);
     m_ui.editorTabWidget->removeTab(tabIdx);
     delete codeViewTab;
+}
+
+
+/**
+ * @brief Opens a source file in the sourcecode viewer and highlights a specific line.
+ */
+CodeViewTab* MainWindow::open(Location loc)
+{
+    return open(loc.m_filename, loc.m_lineNo);
+}
+
+
+/**
+ * @brief Opens a source file in the sourcecode viewer and highlights a specific line.
+ */
+CodeViewTab* MainWindow::open(QString filename, int lineNo)
+{
+    CodeViewTab* currentCodeViewTab = open(filename);
+    if(currentCodeViewTab)
+    {
+        debugMsg("Ensuring that line %d is visible", lineNo);
+        currentCodeViewTab->ensureLineIsVisible(lineNo);    
+    }
+    return currentCodeViewTab;
 }
 
 
@@ -815,13 +946,20 @@ CodeViewTab* MainWindow::open(QString filename)
         CodeViewTab* tab = (CodeViewTab* )m_ui.editorTabWidget->widget(tabIdx);
         if(tab->getFilePath() == filename)
         {
+            debugMsg("Found already opened '%s'", qPrintable(filename));
             foundCodeViewTabIdx = tabIdx;
             
         }
     }
+    if(foundCodeViewTabIdx == -1)
+        debugMsg("Did not find '%s'", qPrintable(filename));
+    
     if(foundCodeViewTabIdx != -1 && foundCodeViewTabIdx == m_ui.editorTabWidget->currentIndex())
          return (CodeViewTab* )m_ui.editorTabWidget->currentWidget();
          
+    // Remove search widget
+    m_ui.widget_search->hide();
+    onIncSearch_textChanged("");
 
     CodeViewTab* codeViewTab = NULL;
     if(foundCodeViewTabIdx != -1)
@@ -834,8 +972,30 @@ CodeViewTab* MainWindow::open(QString filename)
         // Get the tags in the file
         QList<Tag> tagList;
         m_tagManager.scan(filename, &tagList);
-        
-    
+
+        // Close if we have to many opened
+        if(m_ui.editorTabWidget->count() >= m_cfg.m_maxTabs)
+        {
+            // Find the oldest tab
+            int oldestTabIdx = -1;
+            QTime tnow = QTime::currentTime();
+            QTime oldestTabTime = tnow;
+            for(int tabIdx = 0;tabIdx < m_ui.editorTabWidget->count();tabIdx++)
+            {
+                CodeViewTab* testTab = (CodeViewTab* )m_ui.editorTabWidget->widget(tabIdx);
+                if(oldestTabIdx == -1 || testTab->getLastAccessTime() < oldestTabTime)
+                {
+                    oldestTabTime = testTab->getLastAccessTime();
+                    oldestTabIdx = tabIdx;
+                }
+            }
+
+            // Close the oldest tab
+            CodeViewTab* oldestestTab = (CodeViewTab* )m_ui.editorTabWidget->widget(oldestTabIdx);
+            m_ui.editorTabWidget->removeTab(oldestTabIdx);
+            delete oldestestTab;
+        }
+            
         // Create the tab
         codeViewTab = new CodeViewTab(this);
         codeViewTab->setInterface(this);
@@ -851,7 +1011,9 @@ CodeViewTab* MainWindow::open(QString filename)
         m_ui.editorTabWidget->addTab(codeViewTab, getFilenamePart(filename));
         m_ui.editorTabWidget->setCurrentIndex(m_ui.editorTabWidget->count()-1);
     }
-    
+
+    codeViewTab->updateLastAccessStamp();
+        
     // Set window title
     QString windowTitle;
     QString filenamePart, folderPathPart;
@@ -859,6 +1021,7 @@ CodeViewTab* MainWindow::open(QString filename)
     windowTitle.sprintf("%s - %s",  stringToCStr(filenamePart), stringToCStr(folderPathPart));
     setWindowTitle(windowTitle);
 
+    m_locator.setCurrentFile(filename);
 
     ICore_onBreakpointsChanged();
 
@@ -949,6 +1112,65 @@ void MainWindow::onAbout()
 }
 
 
+/**
+ * @brief Called when user presses "Search->Search".
+ */
+void MainWindow::onSearch()
+{
+    m_ui.widget_search->show();
+    m_ui.checkBox_search->setCheckState(Qt::Checked);
+
+    m_ui.lineEdit_search->setFocus();
+    m_ui.lineEdit_search->selectAll();
+}
+
+/**
+ * @brief Called when user presses "Search->Go to main()".
+ */
+void MainWindow::onGoToMain()
+{
+    QVector<Location> locList = m_locator.locateFunction("main");
+
+    if(locList.size() > 0)
+    {
+        open(locList[0]);
+    }
+}
+
+/**
+ * @brief Called when user presses "Search->Go to line".
+ */
+void MainWindow::onGoToLine()
+{
+    // Get currently opened file
+    QString currentFilename;
+    CodeViewTab* currentCodeViewTab = currentTab();
+    assert(currentCodeViewTab != NULL);
+    if(currentCodeViewTab)
+        currentFilename = currentCodeViewTab->getFilePath();
+    
+    // Show dialog
+    GoToDialog dlg(this, &m_locator, &m_cfg, currentFilename);
+    if(dlg.exec() != QDialog::Accepted)
+        return;
+
+    dlg.saveSettings(&m_cfg);
+    
+    // Which file and line was selected?
+    QString filename;
+    int lineno;
+    dlg.getSelection(&filename, &lineno);
+
+
+    // Open file    
+    if(!filename.isEmpty() && lineno > 0)
+    {
+        open(filename, lineno);
+    }
+    else
+        warnMsg("Location not found!");
+}
+
 void MainWindow::onRun()
 {
     Core &core = Core::getInstance();
@@ -1004,7 +1226,7 @@ void MainWindow::ICore_onThreadListChanged()
         names.push_back(name);
         names.push_back(desc);
         QTreeWidgetItem *item = new QTreeWidgetItem(names);
-        item->setData(0, Qt::UserRole, list[idx].id);
+        item->setData(0, Qt::UserRole, list[idx].m_id);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
         threadWidget->insertTopLevelItem(0, item);
 
@@ -1050,8 +1272,8 @@ void MainWindow::ICore_onBreakpointsChanged()
     {
         BreakPoint* bkpt = bklist[u];
         SettingsBreakpoint bkptCfg;
-        bkptCfg.filename = bkpt->fullname;
-        bkptCfg.lineNo = bkpt->lineNo;
+        bkptCfg.m_filename = bkpt->m_fullname;
+        bkptCfg.m_lineNo = bkpt->m_lineNo;
         m_cfg.m_breakpoints.push_back(bkptCfg);
     }
     m_cfg.save();
@@ -1065,8 +1287,8 @@ void MainWindow::ICore_onBreakpointsChanged()
 
         QStringList nameList;
         QString name;
-        nameList.append(getFilenamePart(bk->fullname));
-        name.sprintf("%d", bk->lineNo);
+        nameList.append(getFilenamePart(bk->m_fullname));
+        name.sprintf("%d", bk->m_lineNo);
         nameList.append(name);
         nameList.append(bk->m_funcName);
         nameList.append(longLongToHexString(bk->m_addr));
@@ -1092,8 +1314,8 @@ void MainWindow::ICore_onBreakpointsChanged()
         {
             BreakPoint* bk = bklist[i];
 
-            if(bk->fullname == codeViewTab->getFilePath())
-                numList.push_back(bk->lineNo);
+            if(bk->m_fullname == codeViewTab->getFilePath())
+                numList.push_back(bk->m_lineNo);
         }
 
         codeViewTab->setBreakpoints(numList);
@@ -1193,9 +1415,9 @@ void MainWindow::onBreakpointsWidgetItemDoubleClicked(QTreeWidgetItem * item,int
     int idx = item->data(0, Qt::UserRole).toInt();
     BreakPoint* bk = bklist[idx];
 
-    CodeViewTab* currentCodeViewTab = open(bk->fullname);
+    CodeViewTab* currentCodeViewTab = open(bk->m_fullname);
     if(currentCodeViewTab)
-        currentCodeViewTab->ensureLineIsVisible(bk->lineNo);
+        currentCodeViewTab->ensureLineIsVisible(bk->m_lineNo);
     
 }
     
@@ -1261,7 +1483,7 @@ void MainWindow::ICodeView_onContextMenu(QPoint pos, int lineNo, QStringList tex
             FileInfo& fileInfo = m_sourceFiles[i];
 
             QList<Tag> tagList;
-            m_tagManager.getTags(fileInfo.fullName, &tagList);
+            m_tagManager.getTags(fileInfo.m_fullName, &tagList);
 
             // Loop through all the tags
             for(int j = 0;j < tagList.size();j++)
@@ -1277,12 +1499,12 @@ void MainWindow::ICodeView_onContextMenu(QPoint pos, int lineNo, QStringList tex
                     {
                         // Get filename and lineNo
                         QStringList defList;
-                        defList.push_back(fileInfo.fullName);
+                        defList.push_back(fileInfo.m_fullName);
                         QString lineNoStr;
                         lineNoStr.sprintf("%d", tagInfo.getLineNo());
                         defList.push_back(lineNoStr);
 
-                        if(tagInfo.type != Tag::TAG_FUNC)
+                        if(!tagInfo.isFunc())
                             onlyFuncs = false;
                             
                         // Add to popupmenu
@@ -1424,8 +1646,8 @@ void MainWindow::onCodeViewContextMenuOpenFile()
         for(int j = 0;foundFilename == "" && j < m_sourceFiles.size();j++)
         {
             FileInfo &info = m_sourceFiles[j];
-            if(info.fullName.endsWith("/" + filenameWop))
-                foundFilename = info.fullName;
+            if(info.m_fullName.endsWith("/" + filenameWop))
+                foundFilename = info.m_fullName;
         }
 
         // otherwise look in all the dirs
@@ -1436,7 +1658,7 @@ void MainWindow::onCodeViewContextMenuOpenFile()
             for(int j = 0;foundFilename == "" && j < m_sourceFiles.size();j++)
             {
                 FileInfo &info = m_sourceFiles[j];
-                dividePath(info.fullName, NULL, &folderPath);
+                dividePath(info.m_fullName, NULL, &folderPath);
                 dirs.push_back(folderPath);
             }
             dirs.removeDuplicates();
@@ -1549,8 +1771,7 @@ void MainWindow::ICore_onTargetOutput(QString message)
 {
 
     m_ui.targetOutputView->appendLog(message);
-    m_ui.scrollArea->verticalScrollBar()->setSliderPosition(m_ui.scrollArea->verticalScrollBar()->maximum());
-
+    
 }
 
 
@@ -1649,6 +1870,8 @@ void MainWindow::onBreakpointsRemoveSelected()
 
 }
 
+
+
 void MainWindow::onBreakpointsGoTo()
 {
 
@@ -1670,9 +1893,9 @@ void MainWindow::onBreakpointsGoTo()
             BreakPoint* bk = bklist[idx];
 
             // Show the breakpoint
-            CodeViewTab* currentCodeViewTab = open(bk->fullname);
+            CodeViewTab* currentCodeViewTab = open(bk->m_fullname);
             if(currentCodeViewTab)
-                currentCodeViewTab->ensureLineIsVisible(bk->lineNo);
+                currentCodeViewTab->ensureLineIsVisible(bk->m_lineNo);
         }
     }
 }
@@ -1706,5 +1929,200 @@ void MainWindow::onBreakpointsWidgetContextMenu(const QPoint& pos)
     m_popupMenu.popup(popupPos);
 }
 
+void MainWindow::hideSearchBox()
+{
+    m_ui.widget_search->hide();
 
+    // Get active tab
+    CodeViewTab* currentTab = (CodeViewTab* )m_ui.editorTabWidget->currentWidget();
+    if(!currentTab)
+        return;
+
+    currentTab->clearIncSearch();
     
+}
+
+        
+void MainWindow::onSearchCheckBoxStateChanged(int state)
+{
+    debugMsg("%s(state:%d)", __func__, state);
+
+    if(state == Qt::Checked)
+        m_ui.widget_search->show();
+    else
+    {
+        hideSearchBox();
+    }
+}
+
+void MainWindow::onSearchNext()
+{
+    // Get active tab
+    CodeViewTab* currentTab = (CodeViewTab* )m_ui.editorTabWidget->currentWidget();
+    if(!currentTab)
+        return;
+
+    int lineNo = currentTab->incSearchNext();
+    if(lineNo > 0)
+        currentTab->ensureLineIsVisible(lineNo);
+
+    m_ui.lineEdit_search->setFocus();
+}
+
+void MainWindow::onSearchPrev()
+{
+    // Get active tab
+    CodeViewTab* currentTab = (CodeViewTab* )m_ui.editorTabWidget->currentWidget();
+    if(!currentTab)
+        return;
+
+    int lineNo = currentTab->incSearchPrev();
+    if(lineNo > 0)
+        currentTab->ensureLineIsVisible(lineNo);
+    m_ui.lineEdit_search->setFocus();
+}
+
+
+void MainWindow::onIncSearch_textChanged(const QString &text)
+{
+    debugMsg("%s('%s')", __func__, qPrintable(text));
+
+    // Get active tab
+    CodeViewTab* currentTab = (CodeViewTab* )m_ui.editorTabWidget->currentWidget();
+    if(!currentTab)
+        return;
+
+    int lineNo = currentTab->incSearchStart(text);
+    if(lineNo > 0)
+        currentTab->ensureLineIsVisible(lineNo);
+
+}
+
+/**
+ * @brief Called when the tag manager is done with finding all the tags
+ */
+void MainWindow::onAllTagScansDone()
+{
+    QTreeWidget *funcWidget = m_ui.treeWidget_functions;
+    QTreeWidget *classWidget = m_ui.treeWidget_classes;
+    QTreeWidgetItem *item;
+
+    funcWidget->clear();
+    classWidget->clear();
+
+    // Get all tags
+    QList<Tag> tagList;
+    for(int k = 0;k < m_sourceFiles.size();k++)
+    {
+        FileInfo &info = m_sourceFiles[k];
+
+        // Find the tag
+        QList<Tag> thisTagList;
+        m_tagManager.getTags(info.m_fullName, &thisTagList);
+        tagList += thisTagList;
+    }
+
+    // Get all classes
+    QStringList classList;
+    for(int i = 0;i < tagList.size();i++)
+    {
+        const Tag &tag = tagList[i];
+        QString className = tag.getClassName();
+        if(!className.isEmpty())
+            classList += tag.getClassName();
+    }
+    classList.removeDuplicates();
+    classList.sort();
+    
+    // Insert the classes in the class widget
+    int totalClassFuncCount = 0;
+    for(int ci = 0;ci < classList.size();ci++)
+    {
+        QString className = classList[ci];
+
+        // Insert the class
+        QTreeWidgetItem *classItem = new QTreeWidgetItem;
+        classItem->setText(0, className);
+        QBrush blueBrush (Qt::blue);
+        classItem->setForeground( 0, blueBrush);
+        classWidget->addTopLevelItem(classItem);
+
+
+        // Add all functions to the class in the class widget
+        for(int i = 0;i < tagList.size();i++)
+        {
+            const Tag &tag = tagList[i];
+            if(tag.isFunc() && tag.getClassName() == className)
+            {
+                item = new QTreeWidgetItem;
+                item->setText(0, tag.getName() + tag.getSignature());
+                item->setData(0, Qt::UserRole, tag.getLineNo());
+                item->setText(1, getFilenamePart(tag.getFilePath()));
+                item->setData(1, Qt::UserRole, tag.getFilePath());
+                item->setText(2, QString::number(tag.getLineNo()));
+                classItem->addChild(item);
+
+            }
+        }
+        totalClassFuncCount += tagList.size();
+    }
+
+    // Expand class treewidget?
+    if(totalClassFuncCount < CLASS_LIST_AUTO_EXPAND_COUNT)
+    {
+        for(int j = classWidget->topLevelItemCount()-1;j >= 0;--j)
+        {
+            QTreeWidgetItem * classItem = classWidget->topLevelItem(j);
+            classItem->setExpanded(true);
+        }
+    }
+    
+
+    // Add all functions to the treewidget
+    for(int i = 0;i < tagList.size();i++)
+    {
+        const Tag &tag = tagList[i];
+        if(tag.isFunc())
+        {
+            item = new QTreeWidgetItem;
+            if(tag.getClassName().isEmpty())
+                item->setText(0, " " + tag.getLongName());
+            else
+                item->setText(0, tag.getLongName());
+            item->setData(0, Qt::UserRole, tag.getLineNo());
+            item->setText(1, getFilenamePart(tag.getFilePath()));
+            item->setData(1, Qt::UserRole, tag.getFilePath());
+            item->setText(2, QString::number(tag.getLineNo()));
+                
+            funcWidget->addTopLevelItem(item);
+        }
+    }
+    funcWidget->sortItems(0, Qt::AscendingOrder);
+
+}
+
+void MainWindow::onFuncWidgetItemSelected(QTreeWidgetItem * item, int column)
+{
+    Q_UNUSED(column);
+
+    // Get the linenumber and file where the function is defined in            
+    QString filePath = item->data(1, Qt::UserRole).toString();
+    int lineNo = item->data(0, Qt::UserRole).toInt();
+
+    open(filePath, lineNo);
+}
+
+
+void MainWindow::onClassWidgetItemSelected(QTreeWidgetItem * item, int column)
+{
+    Q_UNUSED(column);
+
+    debugMsg("%s(item:%p column:%d)", __func__, item, column);
+
+    // Get the linenumber and file where the function is defined in            
+    QString filePath = item->data(1, Qt::UserRole).toString();
+    int lineNo = item->data(0, Qt::UserRole).toInt();
+
+    open(filePath, lineNo);
+}
+

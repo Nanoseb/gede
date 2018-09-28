@@ -92,6 +92,19 @@ HEADERS+=autosignalblocker.h
 SOURCES+= execombobox.cpp
 HEADERS+= execombobox.h
 
+SOURCES+=variableinfowindow.cpp
+HEADERS+=variableinfowindow.h
+
+SOURCES+=tabwidgetadv.cpp
+HEADERS+=tabwidgetadv.h
+
+SOURCES+=gotodialog.cpp
+HEADERS+=gotodialog.h
+FORMS+=gotodialog.ui
+
+SOURCES+=locator.cpp
+HEADERS+=locator.h
+
 RESOURCES += resource.qrc
 
 #QMAKE_CXXFLAGS += -I./  -g

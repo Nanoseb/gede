@@ -7,17 +7,18 @@
  */
 
 #include "com.h"
+
+#include <QDateTime>
 #include <QByteArray>
 #include <QDebug>
 #include <unistd.h>
+#include <assert.h>
+#include <sys/time.h>
+
 #include "log.h"
 #include "util.h"
-#include <assert.h>
-#include <unistd.h>
 #include "config.h"
 #include "version.h"
-
-#include <QDateTime>
 
 
 
@@ -47,7 +48,7 @@ const char* Com::asyncClassToString(ComListener::AsyncClass ac)
     
 const char *Token::toString()
 {
-    strcpy(m_tmpBuff, (const char*)stringToCStr(text));
+    strcpy(m_tmpBuff, (const char*)stringToCStr(m_text));
         
     return m_tmpBuff;
 };
@@ -130,7 +131,9 @@ Com::~Com()
 
     if(m_enableLog)
     {
-        writeLogEntry("\r\n#\r\n#\r\n");
+        writeLogEntry("\n");
+        writeLogEntry("#\n");
+        writeLogEntry("#\n");
         m_logFile.close();
     }
 }
@@ -194,7 +197,7 @@ QList<Token*> Com::tokenize(QString str)
                 {
                     cur = new Token(Token::END_CODE);
                     list.push_back(cur);
-                    cur->text += c;
+                    cur->m_text += c;
                     state = END_CODE;
                 }
                 else if(c == '=' || c == '{' || c == '}' || c == ',' ||
@@ -228,14 +231,14 @@ QList<Token*> Com::tokenize(QString str)
                         type = Token::KEY_STAR;
                     cur = new Token(type);
                     list.push_back(cur);
-                    cur->text += c;
+                    cur->m_text += c;
                     state = IDLE;
                 }
                 else if( c != ' ')
                 {
                     cur = new Token(Token::VAR);
                     list.push_back(cur);
-                    cur->text = c;
+                    cur->m_text = c;
                     state = VAR;
                 }
                 
@@ -243,14 +246,14 @@ QList<Token*> Com::tokenize(QString str)
             case END_CODE:
             {
                 QString codeEndStr = "(gdb)";
-                cur->text += c;
+                cur->m_text += c;
 
-                if(cur->text.length() == codeEndStr.length())
+                if(cur->m_text.length() == codeEndStr.length())
                 {
                     state = IDLE;
                     
                 }
-                else if(cur->text.compare(codeEndStr.left(cur->text.length())) != 0)
+                else if(cur->m_text.compare(codeEndStr.left(cur->m_text.length())) != 0)
                 {
                     cur->setType(Token::VAR);
                     state = IDLE;
@@ -265,21 +268,21 @@ QList<Token*> Com::tokenize(QString str)
                 }
                 else if(isEscaped)
                 {
-                    cur->text += c;
+                    cur->m_text += c;
                 }
                 else
-                    cur->text += c;
+                    cur->m_text += c;
             };break;
             case VAR:
             {
                 if(c == '=' || c == ',' || c == '{' || c == '}')
                 {
                     i--;
-                    cur->text = cur->text.trimmed();
+                    cur->m_text = cur->m_text.trimmed();
                     state = IDLE;
                 }
                 else
-                    cur->text += c;
+                    cur->m_text += c;
             };break;
             
         }
@@ -288,7 +291,7 @@ QList<Token*> Com::tokenize(QString str)
     if(cur)
     {
         if(cur->getType() == Token::VAR)
-            cur->text = cur->text.trimmed();
+            cur->m_text = cur->m_text.trimmed();
     }
     return list;
 }
@@ -800,7 +803,16 @@ Resp *Com::parseOutput()
 void Com::writeLogEntry(QString logText)
 {
     assert(m_enableLog == true);
-    m_logFile.write(logText.toUtf8());
+
+    // 
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    QString timeStr;
+    timeStr.sprintf("%02d.%03d", (int)(tv.tv_sec%100), (int)(tv.tv_usec/1000));
+    
+    QString fullText = timeStr + "|" + logText;
+    
+    m_logFile.write(fullText.toUtf8());
     m_logFile.flush();
 }
                
@@ -1024,8 +1036,9 @@ GdbResult Com::command(Tree *resultData, QString text)
     {
         //
         QString logText;
-        logText = "\n<< ";
-        logText += text + "\n";
+        writeLogEntry("\n");
+        logText = "<< ";
+        logText += text;
         writeLogEntry(logText);
     }
     
@@ -1074,7 +1087,7 @@ int Com::init(QString gdbPath, bool enableDebugLog)
     if(m_enableLog)
     {
         QString logStr;
-        logStr = "# Gdb commandline: '" + commandLine + "'\r\n";
+        logStr = "# Gdb commandline: '" + commandLine + "'\n";
         writeLogEntry(logStr);
     }
 
@@ -1184,7 +1197,7 @@ void Com::enableLog(bool enable)
 
     if(m_enableLog)
     {
-        writeLogEntry("#\r\n");
+        writeLogEntry("#\n");
         m_logFile.close();
     }
     m_enableLog = false;
@@ -1199,14 +1212,14 @@ void Com::enableLog(bool enable)
 
             QString logStr;
             QDateTime now = QDateTime::currentDateTime();
-            logStr = "# Created: " + now.toString("yyyy-MM-dd hh:mm:ss") + "\r\n";
+            logStr = "# Created: " + now.toString("yyyy-MM-dd hh:mm:ss") + "\n";
             writeLogEntry(logStr);
-            logStr.sprintf("# Gede version: %d.%d.%d \r\n", GD_MAJOR,GD_MINOR,GD_PATCH);
+            logStr.sprintf("# Gede version: %d.%d.%d \n", GD_MAJOR,GD_MINOR,GD_PATCH);
             writeLogEntry(logStr);
 
             QString distroDesc;
             detectDistro(NULL, &distroDesc);
-            logStr = "# Host: " + distroDesc + "\r\n";
+            logStr = "# Host: " + distroDesc + "\n";
             writeLogEntry(logStr);
 
         }

@@ -7,10 +7,12 @@
  */
 
 #include "tree.h"
+
 #include <QList>
+#include <assert.h>
+
 #include "log.h"
 #include "util.h"
-#include <assert.h>
 
 TreeNode::TreeNode()
     : m_parent(NULL)
@@ -97,8 +99,8 @@ void TreeNode::removeAll()
 void TreeNode::dump(int parentCnt)
 {
     QString text;
-    text.sprintf("+- %s='%s'", stringToCStr(m_name),
-                        stringToCStr(m_data));
+    text.sprintf("+- %s='%s'",
+            stringToCStr(m_name), stringToCStr(m_data));
 
     for(int i = 0;i < parentCnt;i++)
         text  = "    " + text;

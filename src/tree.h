@@ -25,7 +25,6 @@ public:
     
     TreeNode *findChild(QString path) const;
 
-    
     void addChild(TreeNode *child);
     TreeNode *getChild(int i) const { return m_children[i]; };
     int getChildCount() const { return m_children.size(); };
@@ -55,7 +54,7 @@ private:
     QString m_data;
     QVector<TreeNode*> m_children;
     QHash<QString, TreeNode*> m_childMap;
-
+    
 private:
     TreeNode(const TreeNode &) { };
 

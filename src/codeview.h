@@ -15,6 +15,9 @@
 #include "syntaxhighlighterbasic.h"
 #include "syntaxhighlighterrust.h"
 #include "settings.h"
+#include <QTimer>
+#include "variableinfowindow.h"
+
 
 class ICodeView
 {
@@ -53,12 +56,30 @@ public:
     void setBreakpoints(QVector<int> numList);
 
     int getRowHeight();
+
+
+    int incSearchStart(QString text);
+    int incSearchNext();
+    int incSearchPrev();
+    void clearIncSearch();
+    
+private:
+    void idxToRowColumn(int idx, int *rowIdx, int *colIdx);
+    int doIncSearch(QString pattern, int startPos, bool searchForward);
+    void hideInfoWindow();
+
+    
+public slots:
+    void onTimerTimeout();
+
     
 private:
     int getBorderWidth();
     void mouseReleaseEvent( QMouseEvent * event );
     void mouseDoubleClickEvent( QMouseEvent * event );
     void mousePressEvent(QMouseEvent * event);
+    void mouseMoveEvent(QMouseEvent * event);
+    void focusOutEvent ( QFocusEvent * event );
 
 public:
     QFont m_font;
@@ -69,6 +90,14 @@ public:
     SyntaxHighlighter *m_highlighter;
     Settings *m_cfg;
     QString m_text;
+    QTimer m_timer;
+    VariableInfoWindow m_infoWindow;
+
+
+    int m_incSearchStartPosRow;
+    int m_incSearchStartPosColumn;
+    QString m_incSearchText;
+    int m_incSearchStartPosIdx;
 };
 
 

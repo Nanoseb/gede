@@ -7,13 +7,15 @@
  */
 
 #include "settings.h"
+
+#include <QDir>
+#include <QStyleFactory>
+
 #include "util.h"
 #include "log.h"
 #include "ini.h"
 #include "config.h"
 
-#include <QDir>
-#include <QStyleFactory>
 
 
 
@@ -48,6 +50,8 @@ Settings::Settings()
 
 void Settings::loadDefaultsGui()
 {
+    m_maxTabs = 15;
+    
     m_fontFamily = "Monospace";
     m_fontSize = 8;
     m_memoryFontFamily = "Monospace";
@@ -67,6 +71,7 @@ void Settings::loadDefaultsGui()
     m_clrCurrentLine = QColor(100,0,0);
     m_clrNumber = Qt::magenta;
     m_clrForeground = Qt::white;
+    m_clrSelection = QColor(100,100,100);
 
     m_tagSortByName = false;
     m_tagShowLineNumbers = true;
@@ -101,6 +106,8 @@ void Settings::loadDefaultsGui()
 
     m_progConBackspaceKey = 0;
     m_progConDelKey = 2;
+
+    m_variablePopupDelay = 300;
 }
 
 void Settings::loadDefaultsAdvanced()
@@ -134,6 +141,8 @@ void Settings::loadGlobalConfig()
     loadDefaultsAdvanced();
 
     m_enableDebugLog = tmpIni.getBool("General/EnableDebugLog", false);
+
+    m_variablePopupDelay = tmpIni.getInt("Gui/VariablePopupDelay", m_variablePopupDelay);
 
     switch(tmpIni.getInt("Gui/CurrentLineStyle", m_currentLineStyle))
     {
@@ -169,6 +178,8 @@ void Settings::loadGlobalConfig()
 
     m_sourceIgnoreDirs = tmpIni.getStringList("General/ScannerIgnoreDirs", m_sourceIgnoreDirs);
 
+    m_maxTabs = std::max(1, tmpIni.getInt("General/MaxTabs", m_maxTabs));
+
     tmpIni.getByteArray("GuiState/MainWindowState", &m_gui_mainwindowState);
     tmpIni.getByteArray("GuiState/MainWindowGeometry", &m_gui_mainwindowGeometry);
     tmpIni.getByteArray("GuiState/Splitter1State", &m_gui_splitter1State);
@@ -195,7 +206,7 @@ void Settings::loadGlobalConfig()
     m_clrCurrentLine= tmpIni.getColor("GuiColor/ColorCurrentLine", m_clrCurrentLine);
     m_clrNumber = tmpIni.getColor("GuiColor/ColorNumber", Qt::magenta);
     m_clrForeground = tmpIni.getColor("GuiColor/ColorForeGround", Qt::white);
-
+    m_clrSelection = tmpIni.getColor("GuiColor/ColorSelection", m_clrSelection);
 
     m_progConScrollback = std::max(1, tmpIni.getInt("ProgramConsole/Scrollback", m_progConScrollback));
     m_progConColorFg = tmpIni.getColor("ProgramConsole/ColorForeground", m_progConColorFg);
@@ -252,7 +263,10 @@ void Settings::loadProjectConfig()
     m_reloadBreakpoints = tmpIni.getBool("ReuseBreakpoints", false);
 
     m_initialBreakpoint = tmpIni.getString("InitialBreakpoint","main");
-    
+
+    m_gotoRuiList.clear();
+    m_gotoRuiList = tmpIni.getStringList("GoToRecentlyUsed", m_gotoRuiList);
+
 
     //
     QStringList breakpointStringList;
@@ -263,8 +277,8 @@ void Settings::loadProjectConfig()
         if(str.indexOf(':') != -1)
         {
             SettingsBreakpoint bkptCfg;
-            bkptCfg.filename = str.left(str.indexOf(':'));
-            bkptCfg.lineNo = str.mid(str.indexOf(':')+1).toInt();
+            bkptCfg.m_filename = str.left(str.indexOf(':'));
+            bkptCfg.m_lineNo = str.mid(str.indexOf(':')+1).toInt();
             
             m_breakpoints.push_back(bkptCfg);
         }
@@ -316,6 +330,7 @@ void Settings::saveProjectConfig()
 
     tmpIni.setString("InitialBreakpoint",m_initialBreakpoint);
 
+    tmpIni.setStringList("GoToRecentlyUsed", m_gotoRuiList);
 
     
     //
@@ -324,10 +339,10 @@ void Settings::saveProjectConfig()
     {
         SettingsBreakpoint bkptCfg = m_breakpoints[i];
         QString field;
-        field = bkptCfg.filename;
+        field = bkptCfg.m_filename;
         field += ":";
         QString lineNoStr;
-        lineNoStr.sprintf("%d", bkptCfg.lineNo);
+        lineNoStr.sprintf("%d", bkptCfg.m_lineNo);
         field += lineNoStr;
         breakpointStringList.push_back(field);
     }
@@ -354,6 +369,8 @@ void Settings::saveGlobalConfig()
 
     tmpIni.setInt("Gui/CurrentLineStyle", m_currentLineStyle);
 
+    tmpIni.setInt("Gui/VariablePopupDelay", m_variablePopupDelay);
+
     tmpIni.setBool("Gui/ShowLineNo", m_showLineNo);
     
     tmpIni.setString("Gui/Style", m_guiStyleName);
@@ -373,6 +390,7 @@ void Settings::saveGlobalConfig()
 
     tmpIni.setInt("Gui/TabIndentCount", m_tabIndentCount);
 
+    tmpIni.setInt("General/MaxTabs", m_maxTabs);
 
     tmpIni.setStringList("General/ScannerIgnoreDirs", m_sourceIgnoreDirs);
 
@@ -402,6 +420,7 @@ void Settings::saveGlobalConfig()
     tmpIni.setColor("GuiColor/ColorCurrentLine", m_clrCurrentLine);
     tmpIni.setColor("GuiColor/ColorNumber", m_clrNumber);
     tmpIni.setColor("GuiColor/ColorForeGround", m_clrForeground);
+    tmpIni.setColor("GuiColor/ColorSelection", m_clrSelection);
 
     tmpIni.setInt("ProgramConsole/Scrollback", m_progConScrollback);
 
@@ -493,7 +512,14 @@ QStringList Settings::getDefaultCxxKeywordList()
     keywordList += "int16_t";
     keywordList += "int8_t";
     
-    return keywordList;
+    keywordList += "quint32";
+    keywordList += "quint16";
+    keywordList += "quint8";
+    keywordList += "qint32";
+    keywordList += "qint16";
+    keywordList += "qint8";
+    
+   return keywordList;
 }
 
 
@@ -607,6 +633,19 @@ QStringList Settings::getDefaultBasicKeywordList()
 QString Settings::getProgramPath()
 {
     return m_lastProgram;
+}
+
+
+QStringList Settings::getGoToList()
+{
+    return m_gotoRuiList;
+}
+    
+void Settings::setGoToList(QStringList list)
+{
+    while(list.size() > MAX_GOTO_RUI_COUNT)
+        list.takeLast();
+    m_gotoRuiList = list;
 }
 
 

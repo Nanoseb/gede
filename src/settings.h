@@ -27,8 +27,8 @@ class SettingsBreakpoint
 {
 public:
     
-    QString filename;
-    int lineNo;
+    QString m_filename;
+    int m_lineNo;
 };
 
 
@@ -50,6 +50,9 @@ class Settings
         QString getProgramPath();
 
         int getTabIndentCount() const { return m_tabIndentCount; };
+
+        QStringList getGoToList();
+        void setGoToList(QStringList list);
         
     private:
         void loadProjectConfig();
@@ -96,6 +99,7 @@ class Settings
         QColor m_clrCurrentLine;
         QColor m_clrNumber;
         QColor m_clrForeground;
+        QColor m_clrSelection; // Selection in codeview
        
         QByteArray m_gui_mainwindowState;
         QByteArray m_gui_mainwindowGeometry;
@@ -138,6 +142,10 @@ class Settings
         typedef enum { HOLLOW_RECT = 0, FILLED_RECT } CurrentLineStyle;
         CurrentLineStyle m_currentLineStyle;
 
+        int m_maxTabs; //!< Max number of opened tabs at the same time
+
+        int m_variablePopupDelay; //!< Number of milliseconds before the variables value should be displayed in a popup.
+        QStringList m_gotoRuiList;
 };
 
 

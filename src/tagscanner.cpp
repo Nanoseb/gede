@@ -8,17 +8,19 @@
 
 #include "tagscanner.h"
 
-#include "log.h"
-#include "util.h"
-#include "rusttagscanner.h"
-
 #include <QMessageBox>
 #include <QProcess>
 #include <QDebug>
 
+#include "config.h"
+#include "log.h"
+#include "util.h"
+#include "rusttagscanner.h"
 
-static const char ETAGS_CMD[] = "ctags";
-static const char ETAGS_ARGS[] = "  -f - --excmd=number --fields=+nmsSk";
+static bool g_ctagsExist = true;
+static bool g_doneCtagCheck = false;
+static QString g_ctagsCmd; //!< Name of executable
+        
 
 Tag::Tag()
  : m_lineNo(0)
@@ -29,11 +31,11 @@ Tag::Tag()
 QString Tag::getLongName() const
 {
     QString longName;
-    if(this->className.isEmpty())
+    if(m_className.isEmpty())
         longName = m_name;
     else
-        longName = this->className + "::" + m_name;
-    longName += this->m_signature;
+        longName = m_className + "::" + m_name;
+    longName += m_signature;
     return longName;
 }
 
@@ -42,11 +44,11 @@ void Tag::dump() const
 {
     qDebug() << "/------------";
     qDebug() << "Name: " << m_name;
-    qDebug() << "Class: " << className;
-    qDebug() << "Filepath: " << filepath;
-    if(TAG_VARIABLE == type)
+    qDebug() << "Class: " << m_className;
+    qDebug() << "Filepath: " << m_filepath;
+    if(TAG_VARIABLE == m_type)
         qDebug() << "Type: " << " variable";
-    else if(TAG_FUNC == type)
+    else if(TAG_FUNC == m_type)
         qDebug() << "Type: " << " function";
 
 
@@ -70,6 +72,69 @@ void Tag::dump() const
 TagScanner::TagScanner()
  : m_cfg(0)
 {
+
+}
+
+void TagScanner::checkForCtags()
+{
+    // Only do check once
+    if(g_doneCtagCheck)
+        return;
+    g_doneCtagCheck = true;
+    
+    // Check which executable to use
+    g_ctagsExist = true;
+    if(exeExists(ETAGS_CMD2))
+        g_ctagsCmd = ETAGS_CMD2;
+    else if(exeExists(ETAGS_CMD1))
+        g_ctagsCmd = ETAGS_CMD1;
+    else
+        g_ctagsExist = false;
+
+    // Found a executable?
+    if(!g_ctagsExist)
+    {
+        QString msg;
+
+        msg.sprintf("Failed to start program '%s/%s'\n", ETAGS_CMD1, ETAGS_CMD2);
+        msg += "ctags can be installed on ubuntu/debian using command:\n";
+        msg +=  "\n";
+        msg += " apt-get install exuberant-ctags";
+
+        QMessageBox::warning(NULL,
+                    "Failed to start ctags",
+                    msg);
+
+    }
+    else
+    {
+        // Check if ctags can startup?
+        QStringList argList;
+        argList.push_back("--version");
+        QByteArray stdoutContent;
+        int n = execProgram(g_ctagsCmd, argList, &stdoutContent, NULL);
+        QStringList outputList = QString(stdoutContent).split('\n');
+        for(int u = 0;u < outputList.size();u++)
+        {
+            debugMsg("ETAGS: %s", stringToCStr(outputList[u]));
+        }
+        if(n)
+        {
+            QString msg;
+
+            msg.sprintf("Failed to start program '%s'\n", qPrintable(g_ctagsCmd));
+        
+            QMessageBox::warning(NULL,
+                        "Failed to start ctags",
+                        msg);
+            g_ctagsExist = false;
+        }
+        else
+        {
+            infoMsg("Found ctags ('%s')", qPrintable(g_ctagsCmd));
+            g_ctagsExist = true;
+        }
+    }
 
 }
 
@@ -112,32 +177,8 @@ void TagScanner::init(Settings *cfg)
 {
     m_cfg = cfg;
 
-    // Check if ctags exists?
-    QStringList argList;
-    argList.push_back("--version");
-    QByteArray stdoutContent;
-    int n = execProgram(ETAGS_CMD, argList, &stdoutContent, NULL);
-    QStringList outputList = QString(stdoutContent).split('\n');
-    for(int u = 0;u < outputList.size();u++)
-    {
-        debugMsg("ETAGS: %s", stringToCStr(outputList[u]));
-    }
-    if(n)
-    {
-        QString msg;
-
-        msg.sprintf("Failed to start program '%s'\n", ETAGS_CMD);
-        msg += "ctags can be installed on ubuntu/debian using command:\n";
-        msg +  "\n";
-        msg += " apt-get install exuberant-ctags";
-
-        QMessageBox::warning(NULL,
-                    "Failed to start ctags",
-                    msg);
-        m_ctagsExist = false;
-    }
-    else
-        m_ctagsExist = true;
+    checkForCtags();
+    
 }
 
 
@@ -154,20 +195,20 @@ int TagScanner::scan(QString filepath, QList<Tag> *taglist)
     }
     
 
-    if(!m_ctagsExist)
+    if(!g_ctagsExist)
         return 0;
 
     QString etagsCmd;
     etagsCmd = ETAGS_ARGS;
     etagsCmd += " ";
     etagsCmd += filepath;
-    QString name = ETAGS_CMD;
+    QString name = g_ctagsCmd;
     QStringList argList;
     argList = etagsCmd.split(' ',  QString::SkipEmptyParts);
 
     QByteArray stdoutContent;
     QByteArray stderrContent;
-    int rc = execProgram(ETAGS_CMD, argList,
+    int rc = execProgram(g_ctagsCmd, argList,
                             &stdoutContent,
                             &stderrContent);
 
@@ -217,18 +258,18 @@ int TagScanner::parseOutput(QByteArray output, QList<Tag> *taglist)
                 Tag tag;
 
                 tag.m_name = colList[0];
-                tag.filepath = colList[1];
+                tag.m_filepath = colList[1];
                 QString type = colList[3];
                 if(type == "v") // v = variable
-                    tag.type = Tag::TAG_VARIABLE;
+                    tag.m_type = Tag::TAG_VARIABLE;
                 else if(type == "f") // f = function
                 {
-                    tag.type = Tag::TAG_FUNC;
+                    tag.m_type = Tag::TAG_FUNC;
                     tag.setSignature("()");
                 }
                 else
                 {
-                    tag.type = Tag::TAG_VARIABLE;
+                    tag.m_type = Tag::TAG_VARIABLE;
                     //debugMsg("Unknown type (%s) returned from ctags", stringToCStr(type));
                 }    
                 for(int colIdx = 4;colIdx < colList.size();colIdx++)
@@ -244,7 +285,7 @@ int TagScanner::parseOutput(QByteArray output, QList<Tag> *taglist)
                         // qDebug() << '|' << fieldName << '|' << fieldData << '|';
 
                         if(fieldName == "class")
-                            tag.className = fieldData;
+                            tag.m_className = fieldData;
                         if(fieldName == "signature")
                         {
                             tag.setSignature(fieldData);

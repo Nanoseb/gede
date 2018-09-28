@@ -1,3 +1,14 @@
+//#define ENABLE_DEBUGMSG
+
+
+/*
+ * Copyright (C) 2018 Johan Henriksson.
+ * All rights reserved.
+ *
+ * This software may be modified and distributed under the terms
+ * of the BSD license.  See the LICENSE file for details.
+ */
+ 
 #include "tagmanager.h"
 
 #include "tagscanner.h"
@@ -7,6 +18,7 @@
 
 
 ScannerWorker::ScannerWorker()
+ : m_isIdle(true)
 {
 #ifndef NDEBUG
     m_dbgMainThread = QThread::currentThreadId ();
@@ -27,6 +39,13 @@ void ScannerWorker::abort()
     m_workQueue.clear();
 }
 
+bool ScannerWorker::isIdle()
+{
+    QMutexLocker locker(&m_mutex);
+    return m_isIdle;
+}
+
+    
 void ScannerWorker::run()
 {
     assert(m_dbgMainThread != QThread::currentThreadId ());
@@ -41,6 +60,7 @@ void ScannerWorker::run()
         m_wait.wait(&m_mutex);
         while(!m_workQueue.isEmpty())
         {
+            m_isIdle = false;
             QString filePath = m_workQueue.takeFirst();
             m_mutex.unlock();
 
@@ -48,6 +68,7 @@ void ScannerWorker::run()
 
             m_mutex.lock();
         }
+        m_isIdle = true;
         m_mutex.unlock();
         m_doneCond.wakeAll();
     }
@@ -67,6 +88,7 @@ void ScannerWorker::waitAll()
 void ScannerWorker::queueScan(QString filePath)
 {
     m_mutex.lock();
+    m_isIdle = false;
     m_workQueue.append(filePath);
     m_mutex.unlock();
     m_wait.wakeAll();
@@ -142,19 +164,34 @@ void TagManager::onScanDone(QString filePath, QList<Tag> *tags)
 
     m_db[filePath] = info;
 
+    if(m_worker.isIdle())
+        emit onAllScansDone();
+
+
     delete tags;
 }
-    
-int TagManager::queueScan(QString filePath)
-{
-    assert(m_dbgMainThread == QThread::currentThreadId ());
 
-    if(!m_db.contains(filePath))
+int TagManager::queueScan(QStringList filePathList)
+{
+    bool queuedAny = false;
+    assert(m_dbgMainThread == QThread::currentThreadId ());
+    for(int i = 0;i < filePathList.size();i++)
     {
-        m_worker.queueScan(filePath);
+        QString filePath = filePathList[i];
+        if(!m_db.contains(filePath))
+        {
+            m_worker.queueScan(filePath);
+            queuedAny = true;
+        }
     }
+
+    if(!queuedAny)
+        emit onAllScansDone();
+
     return 0;
 }
+
+
 
 void TagManager::scan(QString filePath, QList<Tag> *tagList)
 {
@@ -184,5 +221,42 @@ void TagManager::getTags(QString filePath, QList<Tag> *tagList)
         *tagList = m_db[filePath]->m_tagList;
     }
 }
+
+
+/**
+ * @brief Lookup tags with a specific name.
+ * @param name       The name of the tag (Eg: "main" or "Class::myFunc").
+ * @return tagList   The found tags.
+ */
+void TagManager::lookupTag(QString name, QList<Tag> *tagList)
+{
+    debugMsg("%s(name:'%s')", __func__, qPrintable(name)); 
+
+    QString funcName;
+    QString className;
+
+    if(name.contains("::"))
+    {
+        int divPos = name.indexOf("::");
+        funcName = name.mid(divPos+2);
+        className = name.left(divPos);
+    }
+    else
+        funcName = name;
+
+    foreach (ScannerResult* info, m_db)
+    {
+        for(int j = 0;j < info->m_tagList.size();j++)
+        {
+            Tag &tag = info->m_tagList[j];
+            
+            if(tag.getName() == funcName && className == tag.getClassName())
+                tagList->append(tag);
+            
+        }
+    }
+
+}
+
 
 

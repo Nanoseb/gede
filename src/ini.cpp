@@ -10,9 +10,11 @@
 
 #include <QFile>
 #include <QStringList>
+#include <assert.h>
+#include <QtDebug>
+
 #include "util.h"
 #include "log.h"
-#include <assert.h>
 
 // Enables this if the entries should be sorted in the ini file.
 #define INI_SORT_ENTRIES
@@ -79,7 +81,7 @@ void IniGroup::dump() const
     {
         IniEntry *entry = m_entries[i];
         QString valueStr = entry->m_value.toString();
-        printf("_%s_%s_\n", stringToCStr(entry->m_name), stringToCStr(valueStr));
+        qDebug() << "Name:" << entry->m_name << "=" << stringToCStr(valueStr);
     }
 
 }

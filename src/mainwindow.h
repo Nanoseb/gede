@@ -29,9 +29,11 @@
 class FileInfo
 {
 public:
-    QString name; //!< The name of the file (Eg: "main.c").
-    QString fullName; //!< The full path (Eg: "/a/dir/main.c").
+    QString m_name; //!< The name of the file (Eg: "main.c").
+    QString m_fullName; //!< The full path (Eg: "/a/dir/main.c").
 };
+
+#include "locator.h"
 
 
 class MainWindow : public QMainWindow, public ICore, public ICodeView
@@ -41,8 +43,9 @@ public:
     MainWindow(QWidget *parent);
     virtual ~MainWindow();
 
+    CodeViewTab* open(Location loc);
     CodeViewTab* open(QString filename);
-    
+    CodeViewTab* open(QString filename, int lineNo);
 
 public:
     void insertSourceFiles();
@@ -105,9 +108,11 @@ private:
     void updateCurrentLine(QString filename, int lineno);
     void onCurrentLineChanged(int lineno);
     void onCurrentLineDisabled();
+    void hideSearchBox();
 
 
 public slots:
+    void onIncSearch_textChanged(const QString &text);
     void onFolderViewItemActivated ( QTreeWidgetItem * item, int column );
     void onThreadWidgetSelectionChanged( );
     void onStackWidgetSelectionChanged();
@@ -116,6 +121,12 @@ public slots:
     void onStepIn();
     void onStepOut();
     void onAbout();
+    void onSearch();
+    void onSearchCheckBoxStateChanged(int state);
+    void onSearchNext();
+    void onSearchPrev();
+    void onGoToLine();
+    void onGoToMain();
     void onStop();
     void onBreakpointsWidgetItemDoubleClicked(QTreeWidgetItem * item,int column);
     void onRun();
@@ -128,7 +139,10 @@ public slots:
     void onCodeViewContextMenuToggleBreakpoint();
     void onCodeViewTab_tabCloseRequested ( int index );
     void onCodeViewTab_currentChanged( int tabIdx);
-    
+    void onCodeViewTab_launchContextMenu(const QPoint&);
+    void onCodeViewTab_closeTabsToLeft();
+    void onCodeViewTab_closeOtherTabs();
+
     void onViewStack();
     void onViewBreakpoints();
     void onViewThreads();
@@ -143,6 +157,11 @@ public slots:
     void onBreakpointsRemoveAll();
     void onBreakpointsGoTo();
     void onBreakpointsWidgetContextMenu(const QPoint& pt);
+
+    void onAllTagScansDone();
+    void onFuncWidgetItemSelected(QTreeWidgetItem * item, int column);
+    void onClassWidgetItemSelected(QTreeWidgetItem * item, int column);
+    
 
 private:
     QByteArray m_gui_default_mainwindowState;
@@ -170,6 +189,7 @@ private:
     QFont m_outputFont;
     QFont m_gdbOutputFont;
     QLabel m_statusLineWidget;
+    Locator m_locator;
 };
 
 

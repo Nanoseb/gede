@@ -6,22 +6,15 @@
  * of the BSD license.  See the LICENSE file for details.
  */
 
-#include <assert.h>
-#include <stdio.h>
-#include <QStringList>
-#include "util.h"
-#include "settings.h"
-
-#include "rusttagscanner.h"
-#include <QFile>
-
-
 // #define ENABLE_DEBUGMSG
 
+#include "rusttagscanner.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <QStringList>
+#include <QFile>
+
 #include "util.h"
 #include "settings.h"
 #include "log.h"
@@ -175,8 +168,8 @@ void RustTagScanner::parse(QList<Tag> *taglist)
                     Tag tag;
                     tag.setLineNo(tok->getLineNr());
                     tag.m_name = tok->getText();
-                    tag.filepath = m_filepath;
-                    tag.type = Tag::TAG_FUNC;
+                    tag.m_filepath = m_filepath;
+                    tag.m_type = Tag::TAG_FUNC;
                     state = IDLE;
 
                     // Parse signature

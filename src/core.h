@@ -9,8 +9,6 @@
 #ifndef FILE__CORE_H
 #define FILE__CORE_H
 
-#include <stdint.h>
-#include "com.h"
 #include <QList>
 #include <QMap>
 #include <QHash>
@@ -18,14 +16,15 @@
 #include <QObject>
 #include <QVector>
 
-
+#include "com.h"
 #include "settings.h"
+
 
 class Core;
 
 struct ThreadInfo
 {
-    int id;             //!< The numeric id assigned to the thread by GDB.
+    int m_id;             //!< The numeric id assigned to the thread by GDB.
     QString m_name;     //!< Target-specific string identifying the thread.
 
     QString m_func; //!< The name of the function (Eg: "func"). 
@@ -45,8 +44,8 @@ struct StackFrameEntry
 class SourceFile
 {
 public:
-    QString name;
-    QString fullName;
+    QString m_name;
+    QString m_fullName;
 };
 
 /**
@@ -57,10 +56,10 @@ class BreakPoint
 public:
     BreakPoint(int number) : m_number(number) { };
 
-
+public:
     int m_number;
-    QString fullname;
-    int lineNo;
+    QString m_fullname;
+    int m_lineNo;
     QString m_funcName;
     unsigned long long m_addr;
     
@@ -89,8 +88,8 @@ public:
     void setVarType(QString varType) { m_varType = varType; };
     QString getVarType() { return m_varType; };
     void setData(Type type, QVariant data);
-    uint64_t getPointerAddress();
-    void setPointerAddress(uint64_t addr) { m_addressValid = true; m_address = addr; };
+    quint64 getPointerAddress();
+    void setPointerAddress(quint64 addr) { m_addressValid = true; m_address = addr; };
     bool hasPointerAddress() { return m_addressValid; };
 
     bool hasChildren() { return m_hasChildren; };
@@ -105,7 +104,7 @@ private:
 
     QString m_name;
     QVariant m_data;
-    uint64_t m_address; //!< The address of data the variable points to.
+    quint64 m_address; //!< The address of data the variable points to.
     Type m_type;
     QString m_varType;
     bool m_hasChildren;
@@ -119,8 +118,8 @@ class VarWatch
         VarWatch();
         VarWatch(QString watchId_, QString name_);
         
-        QString getName() { return name; };
-        QString getWatchId() { return watchId; };
+        QString getName() { return m_name; };
+        QString getWatchId() { return m_watchId; };
 
         bool hasChildren();
         bool inScope() { return m_inScope;};
@@ -133,8 +132,8 @@ class VarWatch
 
     private:
 
-        QString watchId;
-        QString name;
+        QString m_watchId;
+        QString m_name;
         bool m_inScope;
         CoreVar m_var;
         QString m_varType;
@@ -226,6 +225,7 @@ public:
     int initLocal(Settings *cfg, QString gdbPath, QString programPath, QStringList argumentList);
     int initCoreDump(Settings *cfg, QString gdbPath, QString programPath, QString coreDumpFile);
     int initRemote(Settings *cfg, QString gdbPath, QString programPath, QString tcpHost, int tcpPort);
+    int evaluateExpression(QString expr, QString *data);
     
     void setListener(ICore *inf) { m_inf = inf; };
 
@@ -261,7 +261,7 @@ public:
     
     QStringList getLocalVars() { return m_localVars; };
 
-    uint64_t getAddress(VarWatch &w);
+    quint64 getAddress(VarWatch &w);
     
 
     int gdbSetBreakpoint(QString filename, int lineNo);
@@ -269,7 +269,7 @@ public:
     void getStackFrames();
     void stop();
     int gdbExpandVarWatchChildren(QString watchId);
-    int gdbGetMemory(uint64_t addr, size_t count, QByteArray *data);
+    int gdbGetMemory(quint64 addr, size_t count, QByteArray *data);
     
     void selectThread(int threadId);
     void selectFrame(int selectedFrameIdx);

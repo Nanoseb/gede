@@ -10,17 +10,19 @@
 #if QT_VERSION < 0x050000
 #include <QtGui/QApplication>
 #endif
+
+#include <QMessageBox>
+#include <QDir>
+
 #include "mainwindow.h"
 #include "core.h"
 #include "log.h"
 #include "util.h"
-#include <QMessageBox>
 #include "tree.h"
 #include "opendialog.h"
 #include "settings.h"
 #include "version.h"
 
-#include <QDir>
 
 
 static int dumpUsage()
@@ -63,7 +65,8 @@ void loadBreakpoints(Settings &cfg, Core &core)
     for(int i = 0;i < cfg.m_breakpoints.size();i++)
     {
         SettingsBreakpoint bkptCfg = cfg.m_breakpoints[i];
-        core.gdbSetBreakpoint(bkptCfg.filename, bkptCfg.lineNo);
+        debugMsg("Setting breakpoint at %s:L%d", qPrintable(bkptCfg.m_filename), bkptCfg.m_lineNo);
+        core.gdbSetBreakpoint(bkptCfg.m_filename, bkptCfg.m_lineNo);
     }
 }
 
@@ -186,6 +189,9 @@ int main(int argc, char *argv[])
 
     if(cfg.m_reloadBreakpoints)
         loadBreakpoints(cfg, core);
+
+    if(rc == 0 && (cfg.m_connectionMode == MODE_LOCAL || cfg.m_connectionMode == MODE_TCP))
+        core.gdbRun();
 
     w.show();
 

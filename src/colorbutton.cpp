@@ -1,7 +1,9 @@
 #include "colorbutton.h"
- #include <QPaintEvent>
- #include <QPainter>
- #include <QColorDialog>
+
+#include <QPaintEvent>
+#include <QPainter>
+#include <QColorDialog>
+
  
 MColorButton::MColorButton(QWidget *parent)
     : QPushButton(parent)
@@ -65,6 +67,7 @@ void MColorButton::showColorSelectDialog(QColor *color)
     if(newColor.isValid())
         *color = newColor;
 
+    update();
 }
 
 
