@@ -534,6 +534,41 @@ QStringList Settings::getDefaultCxxKeywordList()
    return keywordList;
 }
 
+QStringList Settings::getDefaultGoKeywordList()
+{
+    QStringList keywordList;
+
+    keywordList += "break";
+    keywordList += "case";
+    keywordList += "chan";
+    keywordList += "const";
+    keywordList += "continue";
+    keywordList += "default";
+    keywordList += "defer";
+    keywordList += "else";
+    keywordList += "fallthrough";
+    keywordList += "for";
+    keywordList += "func";
+    keywordList += "go";
+    keywordList += "goto";
+    keywordList += "if";
+    keywordList += "import";
+    keywordList += "interface";
+    keywordList += "map";
+    keywordList += "package";
+    keywordList += "range";
+    keywordList += "return";
+    keywordList += "select";
+    keywordList += "struct";
+    keywordList += "switch";
+    keywordList += "type";
+    keywordList += "var";
+
+
+    
+    return keywordList;
+}
+
 
 QStringList Settings::getDefaultRustKeywordList()
 {
@@ -601,6 +636,7 @@ QStringList Settings::getDefaultBasicKeywordList()
     QStringList keywordList;
 
     keywordList += "print";
+    keywordList += "input";
     keywordList += "sleep";
     keywordList += "return";
 
@@ -608,6 +644,8 @@ QStringList Settings::getDefaultBasicKeywordList()
     keywordList += "loop";
     keywordList += "until";
     keywordList += "declare";
+    keywordList += "select";
+    keywordList += "case";
 
     keywordList += "cls";
     keywordList += "function";
@@ -638,6 +676,23 @@ QStringList Settings::getDefaultBasicKeywordList()
     return keywordList;
 }
 
+
+QStringList Settings::getDefaultFortranKeywordList()
+{
+    QStringList keywordList;
+
+    keywordList += "print";
+
+    keywordList += "subroutine";
+    keywordList += "program";
+
+    keywordList += "end";
+    keywordList += "call";
+
+    keywordList += "real";
+
+    return keywordList;
+}
 
 /**
  * @brief Returns the path of the program to debug

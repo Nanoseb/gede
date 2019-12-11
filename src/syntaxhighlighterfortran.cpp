@@ -6,7 +6,7 @@
  * of the BSD license.  See the LICENSE file for details.
  */
 
-#include "syntaxhighlighterbasic.h"
+#include "syntaxhighlighterfortran.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -16,7 +16,7 @@
 #include "settings.h"
 
 
-SyntaxHighlighterBasic::Row::Row()
+SyntaxHighlighterFortran::Row::Row()
     : isCppRow(0)
 {
 };
@@ -25,7 +25,7 @@ SyntaxHighlighterBasic::Row::Row()
 /**
  * @brief Returns the last nonspace field in the row.
  */
-TextField *SyntaxHighlighterBasic::Row::getLastNonSpaceField()
+TextField *SyntaxHighlighterFortran::Row::getLastNonSpaceField()
 {
     for(int j = m_fields.size()-1;j >= 0;j--)
     {
@@ -43,7 +43,7 @@ TextField *SyntaxHighlighterBasic::Row::getLastNonSpaceField()
 /**
  * @brief Returns the number of characters in the row.
  */
-int SyntaxHighlighterBasic::Row::getCharCount()
+int SyntaxHighlighterFortran::Row::getCharCount()
 {
     int len = 0;
     for(int j = m_fields.size()-1;j >= 0;j--)
@@ -55,21 +55,20 @@ int SyntaxHighlighterBasic::Row::getCharCount()
     return len;
 }
 
-
 /**
  * @brief Appends a field to the row.
  */
-void SyntaxHighlighterBasic::Row::appendField(TextField* field)
+void SyntaxHighlighterFortran::Row::appendField(TextField* field)
 {
     m_fields.push_back(field);
 }
 
 
-SyntaxHighlighterBasic::SyntaxHighlighterBasic()
+SyntaxHighlighterFortran::SyntaxHighlighterFortran()
     : m_cfg(NULL)
 
 {
-    QStringList keywordList = Settings::getDefaultBasicKeywordList();
+    QStringList keywordList = Settings::getDefaultFortranKeywordList();
     for(int u = 0;u < keywordList.size();u++)
     {
         m_keywords[keywordList[u]] = true;
@@ -84,17 +83,22 @@ SyntaxHighlighterBasic::SyntaxHighlighterBasic()
 
 }
 
-SyntaxHighlighterBasic::~SyntaxHighlighterBasic()
+SyntaxHighlighterFortran::~SyntaxHighlighterFortran()
 {
     reset();
 }
 
 
+bool SyntaxHighlighterFortran::isSpecialChar(QChar c) const
+{
+    return isSpecialChar(c.toLatin1());
+}
+
 /**
  * @brief Checks if a character is a special character.
  * @return Returns true if the character is a special character (Eg: '\t').
 */
-bool SyntaxHighlighterBasic::isSpecialChar(char c) const
+bool SyntaxHighlighterFortran::isSpecialChar(char c) const
 {
     if(             c == '\t' ||
                     c == ',' ||
@@ -114,11 +118,10 @@ bool SyntaxHighlighterBasic::isSpecialChar(char c) const
         return false;
 }
 
-
 /**
  * @brief Checks if a field is a special character (eg: '>').
  */
-bool SyntaxHighlighterBasic::isSpecialChar(TextField *field) const
+bool SyntaxHighlighterFortran::isSpecialChar(TextField *field) const
 {
     if(field->m_text.size() == 1)
     {
@@ -128,7 +131,7 @@ bool SyntaxHighlighterBasic::isSpecialChar(TextField *field) const
 }
 
 
-bool SyntaxHighlighterBasic::isCppKeyword(QString text) const
+bool SyntaxHighlighterFortran::isCppKeyword(QString text) const
 {
     if(text.isEmpty())
         return false;
@@ -147,7 +150,7 @@ bool SyntaxHighlighterBasic::isCppKeyword(QString text) const
 /**
  * @brief Checks if a string is a keyword.
  */
-bool SyntaxHighlighterBasic::isKeyword(QString text) const
+bool SyntaxHighlighterFortran::isKeyword(QString text) const
 {
     text = text.toLower();
     if(text.isEmpty())
@@ -166,7 +169,7 @@ bool SyntaxHighlighterBasic::isKeyword(QString text) const
 /**
  * @brief Picks a color for a specific field.
  */
-void SyntaxHighlighterBasic::pickColor(TextField *field)
+void SyntaxHighlighterFortran::pickColor(TextField *field)
 {
     assert(field != NULL);
     assert(m_cfg != NULL);
@@ -196,7 +199,7 @@ void SyntaxHighlighterBasic::pickColor(TextField *field)
 /**
  * @brief Deallocates all the rows.
  */
-void SyntaxHighlighterBasic::reset()
+void SyntaxHighlighterFortran::reset()
 {
     for(int r = 0;r < m_rows.size();r++)
     {
@@ -213,9 +216,9 @@ void SyntaxHighlighterBasic::reset()
 }
 
 /**
- * @brief Sets the configuration to use.
+ * @brief Deallocates all the rows.
  */
-void SyntaxHighlighterBasic::setConfig(Settings *cfg)
+void SyntaxHighlighterFortran::setConfig(Settings *cfg)
 {
     m_cfg = cfg;
 
@@ -224,22 +227,27 @@ void SyntaxHighlighterBasic::setConfig(Settings *cfg)
 /**
  * @brief Creates the row for a number of lines of text.
  */
-void SyntaxHighlighterBasic::colorize(QString text)
+void SyntaxHighlighterFortran::colorize(QString text)
+{
+    ParseCharQueue pq(text);
+    colorize(pq);
+}
+
+void SyntaxHighlighterFortran::colorize(ParseCharQueue pq)
 {
     Row *currentRow;
     TextField *field = NULL;
-    enum {IDLE,
-        MULTI_COMMENT,
-        SPACES,
-        WORD, COMMENT1,COMMENT,
-        STRING,
-        ESCAPED_CHAR,
-        INC_STRING
-    } state = IDLE;
-    char c = '\n';
-    char prevC = ' ';
-    char prevPrevC = ' ';
-    bool isEscaped = false;
+    enum {STATE_STARTLINE,
+        STATE_MIDLINE,
+        STATE_PRE_SPACES,
+        STATE_MID_SPACES,
+        STATE_WORD,
+        STATE_STRING,
+        STATE_ESCAPED_CHAR,
+        STATE_INC_STRING
+        ,STATE_LINE_COMMENT
+    } state = STATE_STARTLINE;
+    QChar c = '\n';
     const int tabIndent = m_cfg->getTabIndentCount();
     reset();
 
@@ -247,44 +255,59 @@ void SyntaxHighlighterBasic::colorize(QString text)
     m_rows.push_back(currentRow);
     
 
-    for(int i = 0;i < text.size();i++)
+    while(!pq.isEmpty())
     {
-        c = text[i].toLatin1();
-
         // Was the last character an escape?
-        if(prevC == '\\' && prevPrevC != '\\')
-            isEscaped = true;
-        else
-            isEscaped = false;
-        prevPrevC = prevC;
-        prevC = c;
-        
-        
+        bool isEscaped = false;
+        c = pq.popNext(&isEscaped);
+
         switch(state)
         {   
-            case IDLE:
+            case STATE_STARTLINE:
             {
-                if(c == '/')
+                if(c == '!')
                 {
-                    state = COMMENT1;
+                    state = STATE_LINE_COMMENT;
                     field = new TextField;
-                    field->m_type = TextField::WORD;
+                    field->m_type = TextField::COMMENT;
                     field->m_color = Qt::white;
                     currentRow->appendField(field);
                     field->m_text = c;
                 }
-                else if(c == '\'')
-                {
-                    field = new TextField;
-                    field->m_text = c;
-                    field->m_type = TextField::COMMENT;
-                    field->m_color = Qt::green;
-                    currentRow->appendField(field);
-                    state = COMMENT;
-                }
                 else if(c == ' ' || c == '\t')
                 {
-                    state = SPACES;
+                    state = STATE_PRE_SPACES;
+                    field = new TextField;
+                    field->m_type = TextField::SPACES;
+                    field->m_color = Qt::white;
+                    if(c == '\t')
+                    {
+                        int spacesToAdd = tabIndent-(currentRow->getCharCount()%tabIndent);
+                        field->m_text = QString(spacesToAdd, ' ');
+                    }
+                    else
+                        field->m_text = c;
+                    currentRow->appendField(field);
+                }
+                else if(c == '\n')
+                {
+                    currentRow = new Row;
+                    m_rows.push_back(currentRow);
+                    state = STATE_STARTLINE;
+                }
+                else
+                {
+                    pq.revertPop();
+                    state = STATE_MIDLINE;
+                    field = NULL;
+                }
+            };break;
+            case STATE_MIDLINE:
+            {
+                
+                if(c == ' ' || c == '\t')
+                {
+                    state = STATE_MID_SPACES;
                     field = new TextField;
                     field->m_type = TextField::SPACES;
                     field->m_color = Qt::white;
@@ -299,7 +322,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 }
                 else if(c == '\'')
                 {
-                    state = ESCAPED_CHAR;
+                    state = STATE_ESCAPED_CHAR;
                     field = new TextField;
                     field->m_type = TextField::STRING;
                     currentRow->appendField(field);
@@ -307,7 +330,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 }
                 else if(c == '"')
                 {
-                    state = STRING;
+                    state = STATE_STRING;
                     field = new TextField;
                     if(currentRow->isCppRow)
                         field->m_type = TextField::INC_STRING;
@@ -332,7 +355,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     field->m_text = c;
                     if(isIncString)
                     {
-                        state = INC_STRING;
+                        state = STATE_INC_STRING;
                         field->m_type = TextField::INC_STRING;
                     }
                     else
@@ -379,11 +402,11 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 {
                     currentRow = new Row;
                     m_rows.push_back(currentRow);
-                    state = IDLE;
+                    state = STATE_STARTLINE;
                 }
                 else
                 {
-                    state = WORD;
+                    state = STATE_WORD;
                     field = new TextField;
                     if(QChar(c).isDigit())
                         field->m_type = TextField::NUMBER;
@@ -394,23 +417,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     field->m_text = c;
                 }
             };break;
-            case COMMENT1:
-            {
-                if(c == '\'')
-                {
-                    field->m_text += c;
-                    field->m_type = TextField::COMMENT;
-                    field->m_color = Qt::green;
-                    state = MULTI_COMMENT;
-                    
-                }
-                else
-                {
-                    i--;
-                    state = IDLE;
-                }
-            };break;
-            case MULTI_COMMENT:
+            case STATE_LINE_COMMENT:
             {
                 if(c == '\n')
                 {
@@ -420,30 +427,17 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     field = new TextField;
                     field->m_type = TextField::COMMENT;
                     currentRow->appendField(field);
-                    
-                }
-                else if(text[i-1].toLatin1() == '\'' && c == '/')
-                {
-                    field->m_text += c;
-                    state = IDLE;
+
+                    state = STATE_STARTLINE;
                 }
                 else
                 {
                     field->m_text += c;
                 }
+
             };break;
-            case COMMENT:
-            {
-                if(c == '\n')
-                {
-                    i--;
-                    state = IDLE;
-                }
-                else
-                    field->m_text += c;
-                    
-            };break;
-            case SPACES:
+            case STATE_PRE_SPACES:
+            case STATE_MID_SPACES:
             {
                 if(c == ' ' || c == '\t')
                 {
@@ -458,27 +452,31 @@ void SyntaxHighlighterBasic::colorize(QString text)
                 }
                 else
                 {
-                    i--;
+                    pq.revertPop();
                     field = NULL;
-                    state = IDLE;
+                    if(state == STATE_PRE_SPACES)
+                        state = STATE_STARTLINE;
+                    else
+                        state = STATE_MIDLINE;
                 }  
             };break;
-            case ESCAPED_CHAR:
+            case STATE_ESCAPED_CHAR:
             {
+                
                 field->m_text += c;
                 if(!isEscaped && c == '\'')
                 {
                     field = NULL;
-                    state = IDLE;
+                    state = STATE_MIDLINE;
                 }
             };break;
-            case INC_STRING:
+            case STATE_INC_STRING:
             {
                 if(!isEscaped && c == '\n')
                 {
-                    i--;
+                    pq.revertPop();
                     field = NULL;
-                    state = IDLE;
+                    state = STATE_STARTLINE;
                 }
                 else
                 {
@@ -486,42 +484,43 @@ void SyntaxHighlighterBasic::colorize(QString text)
                     if(!isEscaped && c == '>')
                     {
                         field = NULL;
-                        state = IDLE;
+                        state = STATE_MIDLINE;
                     }
                 }
             };break;
-            case STRING:
+            case STATE_STRING:
             {
                 field->m_text += c;
                 if(!isEscaped && c == '"')
                 {
                     field = NULL;
-                    state = IDLE;
+                    state = STATE_MIDLINE;
                 }
                   
             };break;
-            case WORD:
+            case STATE_WORD:
             {
-                if(isSpecialChar(c) || c == ' ' || c == '\t' || c == '\n' || c == '"')
+                if(isSpecialChar(c) || c == ' ' || c == '\t' || c == '\n')
                 {
-                    i--;
-
-                    if(field->m_text.compare("rem",Qt::CaseInsensitive) == 0)
+                    pq.revertPop();
+                    
+                        if(currentRow->isCppRow)
                     {
-                        field->m_type = TextField::COMMENT;
-                        state = COMMENT;
+                        if(isCppKeyword(field->m_text))
+                            field->m_type = TextField::CPP_KEYWORD;
                     }
                     else
                     {
-                        if(currentRow->isCppRow && isCppKeyword(field->m_text))
-                            field->m_type = TextField::CPP_KEYWORD;
-                        else if(isKeyword(field->m_text))
+                        if(isKeyword(field->m_text))
                             field->m_type = TextField::KEYWORD;
-                    
-                    
-                        field = NULL;
-                        state = IDLE;
                     }
+    
+                
+                    field = NULL;
+                    if(c == '\n')
+                        state = STATE_STARTLINE;
+                    else
+                        state = STATE_MIDLINE;
                 }
                 else
                 {
@@ -552,7 +551,7 @@ void SyntaxHighlighterBasic::colorize(QString text)
  * @return rowIdx   The row to get (0=first row).
  * @return The fields of the row.
  */
-QVector<TextField*> SyntaxHighlighterBasic::getRow(unsigned int rowIdx)
+QVector<TextField*> SyntaxHighlighterFortran::getRow(unsigned int rowIdx)
 {
     assert(rowIdx < getRowCount());
     

@@ -1,5 +1,7 @@
 Declare Function func(ByVal arg1 As Double) As Double
 
+#define TEXT_DEFINE "Hello"
+
 /' Multiline comment. Row1
    Row2.
 '/
@@ -20,6 +22,7 @@ end sub
 example_sub()
 
 PRINT "Looping"
+PRINT TEXT_DEFINE
 
 A=0
 DO
@@ -33,6 +36,22 @@ SLEEP
 'End of program
 
 End
+
+
+Function func99(ByVal cmd As Integer) As String
+    Dim cmdStr as String
+    Select Case cmd
+        Case 0  
+            cmdStr = !"{\"system\":{\"test1\":{\"test2\":0}}}"
+            
+        Case 1  
+            cmdStr = !"{\"system\":{\"test2\":{\"test2\":1}}}" 
+            
+        Case 2  
+            cmdStr = !"{\"system\":{\"test3\":{\"test3\":1}}}"            
+    End select
+    return cmdStr
+end function
 
 Function func(ByVal arg1 As Double) As Double
    Dim res As Double

@@ -13,6 +13,8 @@
 #include <QStringList>
 #include "syntaxhighlightercxx.h"
 #include "syntaxhighlighterbasic.h"
+#include "syntaxhighlighterfortran.h"
+#include "syntaxhighlightergolang.h"
 #include "syntaxhighlighterrust.h"
 #include "settings.h"
 #include <QTimer>
@@ -41,7 +43,7 @@ public:
     CodeView();
     virtual ~CodeView();
 
-    typedef enum {CODE_CXX,CODE_BASIC,CODE_RUST} CodeType;
+    typedef enum {CODE_CXX, CODE_FORTRAN, CODE_BASIC,CODE_RUST, CODE_GOLANG} CodeType;
     
     void setPlainText(QString content, CodeType type);
 

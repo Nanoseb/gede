@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2014-2017 Johan Henriksson.
+ * Copyright (C) 2018 Johan Henriksson.
  * All rights reserved.
  *
  * This software may be modified and distributed under the terms
  * of the BSD license.  See the LICENSE file for details.
  */
 
-#ifndef  FILE__SYNTAXHIGHLIGHTERBASIC_H
-#define  FILE__SYNTAXHIGHLIGHTERBASIC_H
+#ifndef  FILE__SYNTAXHIGHLIGHTERGO_H
+#define  FILE__SYNTAXHIGHLIGHTERGO_H
 
 
 #include <QVector>
@@ -20,11 +20,11 @@
 
 
 
-class SyntaxHighlighterBasic : public SyntaxHighlighter
+class SyntaxHighlighterGo : public SyntaxHighlighter
 {
 public:
-    SyntaxHighlighterBasic();
-    virtual ~SyntaxHighlighterBasic();
+    SyntaxHighlighterGo();
+    virtual ~SyntaxHighlighterGo();
     
     void colorize(QString text);
 
@@ -32,7 +32,6 @@ public:
     unsigned int getRowCount() { return m_rows.size(); };
     void reset();
 
-    bool isCppKeyword(QString text) const;
     bool isKeyword(QString text) const;
     bool isSpecialChar(char c) const;
     bool isSpecialChar(TextField *field) const;
@@ -48,7 +47,6 @@ private:
         void appendField(TextField* field);
         int getCharCount();
         
-        bool isCppRow;
         QVector<TextField*>  m_fields;
     };
 private:
@@ -58,7 +56,6 @@ private:
     Settings *m_cfg;
     QVector <Row*> m_rows;
     QHash <QString, bool> m_keywords;
-    QHash <QString, bool> m_cppKeywords;
 };
 
 #endif // #ifndef FILE__SYNTAXHIGHLIGHTER_H

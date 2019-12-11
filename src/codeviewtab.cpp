@@ -12,6 +12,7 @@
 #include <QScrollBar>
 #include <QFile>
 
+#include "config.h"
 #include "util.h"
 #include "log.h"
 
@@ -86,8 +87,13 @@ int CodeViewTab::open(QString filename, QList<Tag> tagList)
 
     if(extension.toLower() == ".bas")
         m_ui.codeView->setPlainText(text, CodeView::CODE_BASIC);
-    else if(extension.toLower() == ".rs")
+    else if(extension.toLower() == ".f" || extension.toLower() == ".f95"
+             || extension.toLower() == ".for")
+        m_ui.codeView->setPlainText(text, CodeView::CODE_FORTRAN);
+    else if(extension.toLower() == RUST_FILE_EXTENSION)
         m_ui.codeView->setPlainText(text, CodeView::CODE_RUST);
+    else if(extension.toLower() == GOLANG_FILE_EXTENSION)
+        m_ui.codeView->setPlainText(text, CodeView::CODE_GOLANG);
     else
         m_ui.codeView->setPlainText(text, CodeView::CODE_CXX);
 

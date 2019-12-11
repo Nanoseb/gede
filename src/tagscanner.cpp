@@ -182,12 +182,15 @@ void TagScanner::init(Settings *cfg)
 }
 
 
+/**
+ * @brief Scans a sourcefile for tags.
+ */
 int TagScanner::scan(QString filepath, QList<Tag> *taglist)
 {
     
     // Rust file?
     QString extension = getExtensionPart(filepath);
-    if(extension.toLower() == ".rs")
+    if(extension.toLower() == RUST_FILE_EXTENSION)
     {
         RustTagScanner rs;
         rs.setConfig(m_cfg);
@@ -263,6 +266,16 @@ int TagScanner::parseOutput(QByteArray output, QList<Tag> *taglist)
                 if(type == "v") // v = variable
                     tag.m_type = Tag::TAG_VARIABLE;
                 else if(type == "f") // f = function
+                {
+                    tag.m_type = Tag::TAG_FUNC;
+                    tag.setSignature("()");
+                }
+                else if(type == "s") // s = subroutine?
+                {
+                    tag.m_type = Tag::TAG_FUNC;
+                    tag.setSignature("()");
+                }
+                else if(type == "p") // p = program?
                 {
                     tag.m_type = Tag::TAG_FUNC;
                     tag.setSignature("()");

@@ -6,8 +6,8 @@
  * of the BSD license.  See the LICENSE file for details.
  */
 
-#ifndef  FILE__SYNTAXHIGHLIGHTERBASIC_H
-#define  FILE__SYNTAXHIGHLIGHTERBASIC_H
+#ifndef  FILE__SYNTAXHIGHLIGHTERFORTRAN_H
+#define  FILE__SYNTAXHIGHLIGHTERFORTRAN_H
 
 
 #include <QVector>
@@ -17,16 +17,17 @@
 
 #include "settings.h"
 #include "syntaxhighlighter.h"
+#include "parsecharqueue.h"
 
 
-
-class SyntaxHighlighterBasic : public SyntaxHighlighter
+class SyntaxHighlighterFortran : public SyntaxHighlighter
 {
 public:
-    SyntaxHighlighterBasic();
-    virtual ~SyntaxHighlighterBasic();
+    SyntaxHighlighterFortran();
+    virtual ~SyntaxHighlighterFortran();
     
     void colorize(QString text);
+    void colorize(ParseCharQueue text);
 
     QVector<TextField*> getRow(unsigned int rowIdx);
     unsigned int getRowCount() { return m_rows.size(); };
@@ -37,6 +38,7 @@ public:
     bool isSpecialChar(char c) const;
     bool isSpecialChar(TextField *field) const;
     void setConfig(Settings *cfg);
+    bool isSpecialChar(QChar c) const;
 
 private:
     class Row
