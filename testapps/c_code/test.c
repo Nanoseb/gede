@@ -2,8 +2,14 @@
 	 	//rad1
    	//kalle
 	//tab1
+		//tab2
+			//tab3
+//		|tab1_again
+//  	|tab2_again
     //kalle
   	//nisse
+
+#define EMPTY ""
 
 
 void long_func_with_many_arguments(int a_very_long_function_variable_name_xxxxxxx, int another_very_long_variable_name___, int another_another_very_long_variable_name___, int another_another_very_long_variable_name___2)
@@ -40,6 +46,9 @@ int main(int argc,char *argv[])
     sbuffer[2] = '3';
     for(i = 3;i <= 9;i++)
         sbuffer[i] = '0'+i;
+
+    printf("hello"EMPTY" >");
+    printf("<\n");
 
     varStr = "stri\n\r\t\03ng1";
     varStr = "string2";
