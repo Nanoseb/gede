@@ -46,6 +46,10 @@ HEADERS+=syntaxhighlighterrust.h
 HEADERS+=syntaxhighlighterfortran.h
 SOURCES+=syntaxhighlightergolang.cpp
 HEADERS+=syntaxhighlightergolang.h
+SOURCES+=syntaxhighlighterada.cpp
+HEADERS+=syntaxhighlighterada.h
+HEADERS+=adatagscanner.h
+SOURCES+=adatagscanner.cpp
 
 SOURCES+=ini.cpp
 HEADERS+=ini.h

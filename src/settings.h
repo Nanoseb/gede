@@ -46,6 +46,7 @@ class Settings
         static QStringList getDefaultCppKeywordList();
         static QStringList getDefaultBasicKeywordList();
         static QStringList getDefaultRustKeywordList();
+        static QStringList getDefaultAdaKeywordList();
         static QStringList getDefaultFortranKeywordList();
         static QStringList getDefaultGoKeywordList();
 
@@ -86,6 +87,8 @@ class Settings
         int m_outputFontSize;
         QString m_gdbOutputFontFamily;
         int m_gdbOutputFontSize;
+        QString m_gedeOutputFontFamily;
+        int m_gedeOutputFontSize;
 
         QStringList m_sourceIgnoreDirs;
 
@@ -118,6 +121,7 @@ class Settings
         bool m_viewWindowWatch;
         bool m_viewWindowAutoVariables;
         bool m_viewWindowTargetOutput;
+        bool m_viewWindowGedeOutput;
         bool m_viewWindowGdbOutput;
         bool m_viewWindowFileBrowser;
         bool m_viewFuncFilter;

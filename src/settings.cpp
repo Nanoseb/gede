@@ -31,6 +31,7 @@ Settings::Settings()
     m_viewWindowWatch = true;
     m_viewWindowAutoVariables = true;
     m_viewWindowTargetOutput = true;
+    m_viewWindowGedeOutput = true;
     m_viewWindowGdbOutput = true;
     m_viewWindowFileBrowser = true;
     m_enableDebugLog = false;
@@ -64,6 +65,8 @@ void Settings::loadDefaultsGui()
     m_outputFontSize = 8;
     m_gdbOutputFontFamily = "Monospace";
     m_gdbOutputFontSize = 8;
+    m_gedeOutputFontFamily = "Monospace";
+    m_gedeOutputFontSize = 8;
 
 
     m_clrBackground = Qt::black;
@@ -174,6 +177,8 @@ void Settings::loadGlobalConfig()
     m_outputFontSize = tmpIni.getInt("Gui/OutputFontSize", m_outputFontSize);
     m_gdbOutputFontFamily = tmpIni.getString("Gui/GdbOutputFont", m_outputFontFamily);
     m_gdbOutputFontSize = tmpIni.getInt("Gui/GdbOutputFontSize", m_outputFontSize);
+    m_gedeOutputFontFamily = tmpIni.getString("Gui/GedeOutputFont", m_outputFontFamily);
+    m_gedeOutputFontSize = tmpIni.getInt("Gui/GedeOutputFontSize", m_outputFontSize);
 
     m_tagSortByName = tmpIni.getBool("Gui/TagsSortByName", false);
     m_tagShowLineNumbers = tmpIni.getBool("Gui/TagsShowLinenumber", true);
@@ -197,6 +202,7 @@ void Settings::loadGlobalConfig()
     m_viewWindowWatch = tmpIni.getBool("GuiState/EnableWindowWatch", m_viewWindowWatch);
     m_viewWindowAutoVariables = tmpIni.getBool("GuiState/EnableWindowAuto", m_viewWindowAutoVariables);
     m_viewWindowTargetOutput = tmpIni.getBool("GuiState/EnableWindowTargetOutput", m_viewWindowTargetOutput);
+    m_viewWindowGedeOutput = tmpIni.getBool("GuiState/EnableWindowGedeOutput", m_viewWindowGedeOutput);
     m_viewWindowGdbOutput = tmpIni.getBool("GuiState/EnableWindowGdbOutput", m_viewWindowGdbOutput);
     m_viewWindowFileBrowser = tmpIni.getBool("GuiState/EnableWindowFileBrowser", m_viewWindowFileBrowser);
     m_viewFuncFilter = tmpIni.getBool("GuiState/EnableFuncFilter", m_viewFuncFilter);
@@ -394,6 +400,8 @@ void Settings::saveGlobalConfig()
     tmpIni.setInt("Gui/OutputFontSize", m_outputFontSize);
     tmpIni.setString("Gui/GdbOutputFont", m_gdbOutputFontFamily);
     tmpIni.setInt("Gui/GdbOutputFontSize", m_gdbOutputFontSize);
+    tmpIni.setString("Gui/GedeOutputFont", m_gedeOutputFontFamily);
+    tmpIni.setInt("Gui/GedeOutputFontSize", m_gedeOutputFontSize);
 
     tmpIni.setBool("Gui/TagsSortByName", m_tagSortByName);
     tmpIni.setBool("Gui/TagsShowLinenumber", m_tagShowLineNumbers);
@@ -417,6 +425,7 @@ void Settings::saveGlobalConfig()
     tmpIni.setBool("GuiState/EnableWindowWatch", m_viewWindowWatch);
     tmpIni.setBool("GuiState/EnableWindowAuto", m_viewWindowAutoVariables);
     tmpIni.setBool("GuiState/EnableWindowTargetOutput", m_viewWindowTargetOutput);
+    tmpIni.setBool("GuiState/EnableWindowGedeOutput", m_viewWindowGedeOutput);
     tmpIni.setBool("GuiState/EnableWindowGdbOutput", m_viewWindowGdbOutput);
     tmpIni.setBool("GuiState/EnableWindowFileBrowser", m_viewWindowFileBrowser);
     tmpIni.setBool("GuiState/EnableFuncFilter", m_viewFuncFilter);
@@ -567,6 +576,42 @@ QStringList Settings::getDefaultGoKeywordList()
 
 
     
+    return keywordList;
+}
+
+
+QStringList Settings::getDefaultAdaKeywordList()
+{
+    QStringList keywordList;
+
+    keywordList += "if";
+    keywordList += "loop";
+    keywordList += "for";
+    keywordList += "begin";
+    keywordList += "end";
+    keywordList += "then";
+    keywordList += "return";
+
+    keywordList += "with";
+    keywordList += "use";
+    keywordList += "in";
+    keywordList += "is";
+    keywordList += "of";
+
+    keywordList += "procedure";
+    keywordList += "function";
+
+    keywordList += "pragma";
+    keywordList += "renames";
+    keywordList += "import";
+
+
+    keywordList += "integer";
+    keywordList += "array";
+    keywordList += "string";
+    keywordList += "character";
+    keywordList += "natural";
+
     return keywordList;
 }
 
